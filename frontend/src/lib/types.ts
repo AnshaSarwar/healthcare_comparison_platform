@@ -125,6 +125,18 @@ export interface Citation {
   section: string;
   quote: string;
   document_id: string;
+  page_number: number | null;
+}
+
+export interface SourceChunk {
+  index: number;
+  plan_id: string | null;
+  plan_name: string | null;
+  section: string | null;
+  document_id: string | null;
+  chunk_index: number | null;
+  page_number: number | null;
+  score: number | null;
 }
 
 export interface ComparisonResult {
@@ -159,6 +171,7 @@ export interface AgentChatFinal {
 
 export type AgentSseEvent =
   | { type: "token"; text: string }
+  | { type: "sources"; sources: SourceChunk[] }
   | { type: "step"; node: string; detail: string }
   | { type: "error"; detail: string }
   | AgentChatFinal;

@@ -13,7 +13,7 @@ from backend.agents.routing import grade_records, rewrite_queries, route_questio
 from backend.agents.state import AgentMessage, AgentState
 from backend.agents.tools import retrieve_policy_tool, run_comparison_tool
 from backend.observability.agent_trace import log_agent_event
-from backend.rag.generate import citations_from_answer, stream_answer
+from backend.rag.generate import citations_from_answer, sources_from_records, stream_answer
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,27 @@ _PRICING_LEAK = re.compile(
     r")",
     re.IGNORECASE,
 )
+
+
+_HAS_NUMBER = re.compile(r"\d")
+_HAS_CITATION = re.compile(r"\[\d+\]")
+
+
+def _find_unattributed_numbers(answer: str) -> list[str]:
+    """Observability only — flags sentences with a number but no [n] citation marker
+    anywhere in them, for the structured agent log. Never mutates the answer: unlike
+    the pricing-leak check above, a false positive here (e.g. a transition sentence
+    referencing "two plans") is common enough that auto-rewriting would do more harm
+    than a logged warning a reviewer can act on.
+    """
+    sentences = re.split(r"(?<=[.!?])\s+", answer)
+    return [
+        sentence.strip()
+        for sentence in sentences
+        if sentence.strip()
+        and _HAS_NUMBER.search(sentence)
+        and not _HAS_CITATION.search(sentence)
+    ]
 
 
 def _append_trace_item(node: str, detail: str) -> list[dict[str, str]]:
@@ -205,6 +226,7 @@ def generate_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
 
     gen_route = "compare" if route == "compare" else "policy_qa"
     writer = get_stream_writer()
+    writer({"type": "sources", "sources": sources_from_records(records)})
     pieces: list[str] = []
     try:
         for chunk in stream_answer(
@@ -269,6 +291,14 @@ def verify_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
             detail = "pricing_blocked"
 
     citations = citations_from_answer(answer, records) if records else []
+    unattributed = _find_unattributed_numbers(answer)
+    if unattributed:
+        log_agent_event(
+            "verify",
+            "unattributed_numbers_detected",
+            count=len(unattributed),
+            examples=unattributed[:3],
+        )
     messages = _prior_messages(state)
     messages.append({"role": "assistant", "content": answer})
     log_agent_event("verify", detail, citation_count=len(citations))

@@ -213,13 +213,22 @@ async def stream_agent_chat(
     previous_trace_len = 0
     final_state: dict[str, Any] = dict(initial)
     try:
-        async for mode, chunk in graph.astream(
+        # `subgraphs=True` is required: `generate_node` (where token/sources custom
+        # writes happen) runs inside the compiled `policy`/`compare` subgraphs, not
+        # the top-level graph. Without it, LangGraph does not propagate `stream_mode=
+        # "custom"` events from a subgraph node up to this outer astream() call at
+        # all — confirmed empirically; this was a pre-existing gap, not specific to
+        # the "sources" event added here. The item shape changes accordingly from
+        # `(mode, chunk)` to `(namespace, mode, chunk)`; the per-node "updates"
+        # handling below is unaffected since it only reads `chunk`.
+        async for _namespace, mode, chunk in graph.astream(
             initial,
             config=config,
             stream_mode=["updates", "custom"],
+            subgraphs=True,
         ):
             if mode == "custom":
-                if isinstance(chunk, dict) and chunk.get("type") == "token":
+                if isinstance(chunk, dict) and chunk.get("type") in ("token", "sources"):
                     yield _sse(chunk)
                 continue
 

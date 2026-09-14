@@ -10,7 +10,7 @@ from rank_bm25 import BM25Okapi
 from backend.core.config import get_settings
 from backend.rag.cache import cosine
 from backend.rag.embeddings import get_embeddings
-from backend.rag.rerank import rerank
+from backend.rag.rerank import rerank_pairwise
 from backend.rag.store import dense_search, scroll_all_payloads
 
 logger = logging.getLogger(__name__)
@@ -238,7 +238,7 @@ def retrieve(
                 merged[record_key(hit)] = hit
         expanded = expand_parents(list(merged.values()))
         pool_k = max(settings.rag_rerank_k * 2, len(plan_id_strs) * 2)
-        reranked = rerank(query, expanded, k=pool_k)
+        reranked = rerank_pairwise(query, expanded, k=pool_k)
         return diversify_by_plan(reranked, plan_ids=plan_id_strs, k=settings.rag_rerank_k)
 
     expanded = _retrieve_candidates(
@@ -248,7 +248,25 @@ def retrieve(
         dense_k=settings.rag_dense_k,
         sparse_k=settings.rag_sparse_k,
     )
-    return rerank(query, expanded, k=settings.rag_rerank_k)
+    return rerank_pairwise(query, expanded, k=settings.rag_rerank_k)
+
+
+class HybridRetriever:
+    """Vector (Qdrant, cosine) + BM25 hybrid search with reciprocal-rank fusion, MMR
+    diversification, and cross-encoder-pattern reranking. Thin named wrapper over
+    `retrieve()` — the pipeline itself lives in the module-level functions above and is
+    covered by `tests/test_rag_helpers.py`; this class just gives callers a clean,
+    documented entry point.
+    """
+
+    def search(
+        self,
+        query: str,
+        *,
+        plan_ids: list[UUID] | None = None,
+        organization_ids: list[UUID] | None = None,
+    ) -> list[dict[str, Any]]:
+        return retrieve(query, plan_ids=plan_ids, organization_ids=organization_ids)
 
 
 def _retrieve_candidates(

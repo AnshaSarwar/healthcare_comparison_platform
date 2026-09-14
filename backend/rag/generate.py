@@ -16,25 +16,51 @@ logger = logging.getLogger(__name__)
 
 RouteKind = Literal["policy_qa", "compare"]
 
+# Shared zero-hallucination discipline, prepended to both route-specific prompts below.
+# Health-plan cost-sharing figures and eligibility math have zero tolerance for
+# fabrication — this block exists specifically to suppress two failure modes: (a) the
+# model performing or "helpfully" simplifying arithmetic the sources don't already
+# state, and (b) claims with no traceable source. Both prompts still forbid pricing
+# separately below since that's a distinct compliance requirement, not a hallucination
+# one — pricing must never appear even when it IS in a source.
+RAG_STRICT_DISCIPLINE = (
+    "You are a compliance-grade health-benefits policy assistant. Follow every rule exactly.\n\n"
+    "SOURCE DISCIPLINE:\n"
+    "1. Answer ONLY using the numbered sources provided. Do not use outside knowledge, "
+    "training data, or assumptions about typical insurance plans.\n"
+    "2. Every factual claim — every number, date, duration, percentage, and coverage rule — "
+    "must be immediately followed by its source marker, e.g. [2]. A sentence with no bracket "
+    "citation must contain no claim, only transition text.\n"
+    "3. Quote numbers and durations VERBATIM from the source text. Never compute, convert, "
+    "round, sum, average, or otherwise derive a number that is not already written explicitly "
+    "in a source. If the answer requires arithmetic the sources do not already state as a "
+    "result, say the plan documents do not state a computed answer.\n"
+    "4. If sources conflict or are ambiguous, say so explicitly rather than silently picking one.\n"
+    "5. If the sources do not contain the answer, respond exactly: "
+    '"The provided plan documents do not state this." Do not guess or hedge with general '
+    "insurance knowledge.\n"
+    "6. Never invent a policy clause, exclusion, section name, or citation number not in the "
+    "numbered sources.\n"
+)
+
 POLICY_SYSTEM_PROMPT = (
-    "You are a group-health benefits assistant. Answer only from the numbered sources. "
-    "Cite sources with [n] immediately after each claim. "
-    "If the sources cover multiple plans, answer separately for each plan — "
-    "do not collapse different waiting periods or rules into a single number. "
-    "If the sources do not contain the answer, say you cannot find it in the policy wording. "
-    "Never mention premiums, prices, rate cards, or per-employee monthly cost. "
-    "Never invent clauses."
+    RAG_STRICT_DISCIPLINE
+    + "\nWhen multiple plans are in scope, answer separately for each plan — do not collapse "
+    "different waiting periods or rules into a single number. "
+    "Never mention premiums, prices, rate cards, or per-employee monthly cost, even if one "
+    "appears in a source."
 )
 
 COMPARE_SYSTEM_PROMPT = (
-    "You are a group-health benefits assistant comparing employer plans. "
-    "COMPARISON FACTS come from the deterministic rules engine — use them for eligibility "
-    "outcomes, pass/fail/partial status, and ranking scores without policy citations. "
-    "Use numbered sources only for coverage wording (waiting periods, maternity, exclusions, "
-    "pre-existing conditions). "
-    "Never mention premiums, prices, rate cards, or per-employee monthly cost. "
-    "Never invent clauses. "
-    "Write a concise comparison: lead with rules-engine ranking, then policy differences with [n] cites."
+    RAG_STRICT_DISCIPLINE
+    + "\nCOMPARISON FACTS come from the deterministic rules engine — use them verbatim for "
+    "eligibility outcomes, pass/fail/partial status, and ranking scores, without policy "
+    "citations (they are not drawn from the numbered sources). Use numbered sources only for "
+    "coverage wording (waiting periods, maternity, exclusions, pre-existing conditions). "
+    "Never mention premiums, prices, rate cards, or per-employee monthly cost, even if one "
+    "appears in a source. "
+    "Write a concise comparison: lead with rules-engine ranking, then policy differences with "
+    "[n] cites."
 )
 
 _POLICY_PROMPT = ChatPromptTemplate.from_messages(
@@ -94,9 +120,32 @@ def citations_from_answer(answer: str, records: list[dict[str, Any]]) -> list[di
                 "section": record.get("section") or "",
                 "quote": quote,
                 "document_id": str(document_id),
+                "page_number": record.get("page_number"),
             }
         )
     return citations
+
+
+def sources_from_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Build the metadata-first SSE "sources" payload: one entry per retrieved/reranked
+    record, 1-indexed to match the exact `[n]` numbering `format_sources` uses for the
+    generation prompt above. Emitted before the token stream starts — unlike
+    `citations_from_answer`, this doesn't depend on the model having generated anything
+    yet, since it just describes what the answer will be grounded on.
+    """
+    return [
+        {
+            "index": index,
+            "plan_id": record.get("plan_id"),
+            "plan_name": record.get("plan_name"),
+            "section": record.get("section"),
+            "document_id": record.get("document_id"),
+            "chunk_index": record.get("chunk_index"),
+            "page_number": record.get("page_number"),
+            "score": record.get("_score"),
+        }
+        for index, record in enumerate(records, start=1)
+    ]
 
 
 def _llm() -> ChatOpenAI:

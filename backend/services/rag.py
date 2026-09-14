@@ -10,7 +10,7 @@ from uuid import UUID
 from backend.core.policies import SecurityContext
 from backend.rag.cache import get_exact_cached_answer, get_semantic_cached_answer, store_cached_answer
 from backend.rag.embeddings import get_embeddings
-from backend.rag.generate import astream_answer, citations_from_answer
+from backend.rag.generate import astream_answer, citations_from_answer, sources_from_records
 from backend.rag.retriever import retrieve
 from backend.rag.store import rag_configured
 from backend.schemas import Citation, RagQueryResponse
@@ -78,6 +78,8 @@ async def stream_rag_answer(
         logger.exception("Retrieval failed")
         yield _sse({"type": "error", "detail": f"Retrieval failed: {exc}"})
         return
+
+    yield _sse({"type": "sources", "sources": sources_from_records(records)})
 
     pieces: list[str] = []
     async for token in astream_answer(question, records):

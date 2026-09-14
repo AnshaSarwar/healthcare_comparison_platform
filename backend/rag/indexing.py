@@ -12,7 +12,7 @@ from sqlalchemy.orm import selectinload
 from backend.domain.enums import DocumentIndexStatus
 from backend.models import Plan, PlanDocument
 from backend.rag.embeddings import get_embeddings
-from backend.rag.loaders import load_text, read_path
+from backend.rag.loaders import load_pages, load_text, read_path
 from backend.rag.retriever import rebuild_bm25_from_qdrant
 from backend.rag.splitters import split_for_parent_child
 from backend.rag.store import delete_document_chunks, ensure_collection, rag_configured, upsert_chunks
@@ -38,14 +38,23 @@ def index_plan_document(document: PlanDocument, text: str | None = None) -> None
     plan = document.plan
     provider = plan.provider
     if text is None:
-        text = read_path(Path(document.storage_path))
+        path = Path(document.storage_path)
+        pages = load_pages(path.name, path.read_bytes())
+    else:
+        # Caller already loaded/joined the text (e.g. re-indexing from a cached
+        # string) — no page boundaries are available for this path.
+        pages = [(None, text)]
     base_meta = {
         "document_id": str(document.id),
         "plan_id": str(plan.id),
         "organization_id": str(provider.organization_id),
         "plan_name": plan.name,
     }
-    chunks = split_for_parent_child(text, base_meta)
+    chunks: list = []
+    for page_number, page_text in pages:
+        chunks.extend(
+            split_for_parent_child(page_text, {**base_meta, "page_number": page_number})
+        )
     if not chunks:
         raise ValueError("No chunks produced from document")
     vectors = get_embeddings().embed_documents([chunk.page_content for chunk in chunks])

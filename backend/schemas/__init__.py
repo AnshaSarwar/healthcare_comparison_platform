@@ -19,7 +19,13 @@ from backend.schemas.plan import (
     PricingTier,
     UserRead,
 )
-from backend.schemas.rag import Citation, PlanDocumentRead, RagQueryRequest, RagQueryResponse
+from backend.schemas.rag import (
+    Citation,
+    PlanDocumentRead,
+    RagQueryRequest,
+    RagQueryResponse,
+    SourceChunk,
+)
 from backend.schemas.policy import (
     PlanVersionCreateRequest,
     PlanVersionRead,
@@ -48,6 +54,7 @@ __all__ = [
     "PlanDocumentRead",
     "RagQueryRequest",
     "RagQueryResponse",
+    "SourceChunk",
     "AgentChatRequest",
     "AgentChatResponse",
     "PlanVersionCreateRequest",

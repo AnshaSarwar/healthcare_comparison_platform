@@ -1,30 +1,20 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { ApiError, listPlans, streamAgentChat } from "@/lib/api";
-import type { Citation, Plan } from "@/lib/types";
+import { ApiError, listPlans } from "@/lib/api";
+import { useAgentStream } from "@/lib/hooks/useAgentStream";
+import type { Plan } from "@/lib/types";
 
 const SELECTED_KEY = "benefits_selected_plans";
-
-interface ChatMessage {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  steps?: string[];
-  citations?: Citation[];
-  route?: string;
-}
 
 export default function ChatPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [planIds, setPlanIds] = useState<string[]>([]);
   const [question, setQuestion] = useState("");
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [threadId, setThreadId] = useState<string | null>(null);
-  const [streaming, setStreaming] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
-  const abortRef = useRef<AbortController | null>(null);
+
+  const { messages, sending, connectionState, error, send, cancel } = useAgentStream();
 
   useEffect(() => {
     let cancelled = false;
@@ -43,99 +33,26 @@ export default function ChatPage() {
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof ApiError ? err.message : "Failed to load plans");
+          setLoadError(err instanceof ApiError ? err.message : "Failed to load plans");
         }
       }
     })();
     return () => {
       cancelled = true;
-      abortRef.current?.abort();
+      cancel();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, streaming]);
+  }, [messages, sending]);
 
-  async function onSubmit(e: FormEvent) {
+  function onSubmit(e: FormEvent) {
     e.preventDefault();
-    const text = question.trim();
-    if (!text || streaming) return;
-
-    setError(null);
+    if (!question.trim() || sending) return;
+    send(question, planIds);
     setQuestion("");
-    const userMsg: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content: text,
-    };
-    const assistantId = crypto.randomUUID();
-    setMessages((prev) => [
-      ...prev,
-      userMsg,
-      { id: assistantId, role: "assistant", content: "", steps: [] },
-    ]);
-    setStreaming(true);
-
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    try {
-      await streamAgentChat(
-        { question: text, plan_ids: planIds, thread_id: threadId },
-        (event) => {
-          if (event.type === "token") {
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantId
-                  ? { ...m, content: m.content + (event.text || "") }
-                  : m,
-              ),
-            );
-          } else if (event.type === "step") {
-            const label = `${event.node}: ${event.detail}`;
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantId
-                  ? { ...m, steps: [...(m.steps || []), label] }
-                  : m,
-              ),
-            );
-          } else if (event.type === "final") {
-            if (event.thread_id) setThreadId(event.thread_id);
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantId
-                  ? {
-                      ...m,
-                      content: event.answer || m.content,
-                      citations: event.citations,
-                      route: event.route,
-                    }
-                  : m,
-              ),
-            );
-          } else if (event.type === "error") {
-            setError(event.detail);
-          }
-        },
-        controller.signal,
-      );
-    } catch (err) {
-      if ((err as Error).name !== "AbortError") {
-        setError(err instanceof ApiError ? err.message : "Chat failed");
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantId && !m.content
-              ? { ...m, content: "Sorry — something went wrong." }
-              : m,
-          ),
-        );
-      }
-    } finally {
-      setStreaming(false);
-      abortRef.current = null;
-    }
   }
 
   function togglePlan(id: string) {
@@ -143,6 +60,8 @@ export default function ChatPage() {
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
   }
+
+  const banner = loadError || error;
 
   return (
     <div className="chat-layout">
@@ -152,7 +71,13 @@ export default function ChatPage() {
           Ask policy questions or request a comparison. Answers stream live with
           citations when documents are indexed.
         </p>
-        {error && <div className="error-banner">{error}</div>}
+        {banner && <div className="error-banner">{banner}</div>}
+        {connectionState === "disconnected" && (
+          <div className="error-banner">
+            Connection dropped mid-answer. Check your network, then send the question
+            again.
+          </div>
+        )}
         <div className="panel" style={{ marginBottom: 8 }}>
           <p style={{ margin: "0 0 10px", fontWeight: 600, fontSize: "0.9rem" }}>
             Scope to plans
@@ -185,8 +110,18 @@ export default function ChatPage() {
             {m.role === "assistant" && m.steps && m.steps.length > 0 && (
               <div className="steps">{m.steps.join(" → ")}</div>
             )}
+            {m.role === "assistant" && m.sources && m.sources.length > 0 && (
+              <div className="plan-meta" style={{ marginBottom: 6 }}>
+                {m.sources.map((s) => (
+                  <span key={s.index} className="chip" title={s.section || undefined}>
+                    [{s.index}] {s.plan_name}
+                    {s.page_number != null ? ` · p.${s.page_number}` : ""}
+                  </span>
+                ))}
+              </div>
+            )}
             <div style={{ whiteSpace: "pre-wrap" }}>
-              {m.content || (streaming ? "…" : "")}
+              {m.content || (sending ? "…" : "")}
             </div>
             {m.route && (
               <div className="muted" style={{ marginTop: 8, fontSize: "0.75rem" }}>
@@ -198,6 +133,7 @@ export default function ChatPage() {
                 {m.citations.map((c, i) => (
                   <blockquote key={`${c.document_id}-${i}`} className="citation">
                     <strong>{c.plan_name}</strong> — {c.section}
+                    {c.page_number != null ? ` (p.${c.page_number})` : ""}
                     <div style={{ marginTop: 4 }}>&ldquo;{c.quote}&rdquo;</div>
                   </blockquote>
                 ))}
@@ -213,14 +149,14 @@ export default function ChatPage() {
           placeholder="Ask about coverage, waiting periods, or compare plans…"
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
-          disabled={streaming || planIds.length === 0}
+          disabled={sending || planIds.length === 0}
         />
         <button
           className="btn"
           type="submit"
-          disabled={streaming || !question.trim() || planIds.length === 0}
+          disabled={sending || !question.trim() || planIds.length === 0}
         >
-          {streaming ? "…" : "Send"}
+          {sending ? "…" : "Send"}
         </button>
       </form>
     </div>
