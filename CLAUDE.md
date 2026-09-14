@@ -7,57 +7,16 @@ Guidance for Claude Code when working in this repository.
 **Benefits Compare** — a multi-tenant B2B backend + Next.js frontend that helps employers
 compare healthcare/insurance plans from providers: deterministic eligibility + scoring
 (rules engine), plus optional LLM-generated, citation-grounded narratives via RAG and a
-LangGraph agentic chat. Full product context, data model, and API list live in
-`PROJECT.md` — read that first for anything beyond basic orientation.
-
-Not a git repository yet (`Is a git repository: false`) — treat any git command as
-something to confirm with the user first (e.g. offer `git init`).
-
-## Directory layout
-
-```
-backend/                 FastAPI app (Python 3.11, async SQLAlchemy)
-  main.py                App entrypoint, lifespan (create_all/seed/index worker), /health
-  core/                  Settings (config.py), JWT + password hashing (security.py), RBAC (policies.py)
-  api/v1/                Route modules: auth, plans, comparisons, documents, rag, agents, admin
-  api/deps.py            DB session + JWT auth dependencies
-  domain/                Enums + domain/rules_engine (eligibility + scoring engine — the live one)
-  comparison/rules_engine  Empty directory, no files — stale, safe to ignore/remove
-  models/                SQLAlchemy ORM tables (base.py, entities.py)
-  schemas/               Pydantic request/response models
-  services/               Business logic called by routes (plan, comparison, document, rag, narrative, agent, admin)
-  rag/                    Ingest pipeline: loaders, splitters, embeddings, store (Qdrant), retriever, rerank, generate, cache (Redis)
-  agents/                LangGraph agentic RAG: graph.py, nodes.py, routing.py, state.py, tools.py, subgraphs/ (policy.py, compare.py)
-  workers/                Background indexing queue/worker (Redis-backed)
-  observability/         Structured agent tracing/logging
-  db/                    session.py (async engine), seed.py (demo data)
-
-frontend/                Next.js (App Router) UI, TypeScript
-  src/app/                Routes: /login, /register, and role-aware (app)/ group:
-                          /plans, /comparisons/[id], /chat, /employer, /provider, /platform
-  src/components/        AppShell, AuthGuard, PlanEditorForm
-  src/lib/                api.ts (backend client), auth.ts, types.ts
-
-alembic/                 DB migrations (versions/0001..0005); alembic.ini at repo root
-data/plans/               Seed policy booklet markdown files (indexed on startup)
-data/uploads/             Uploaded plan documents
-infra/                    docker-compose.yml (Postgres, Redis, Qdrant, + app profile), docker/api-entrypoint.sh
-tests/                    pytest unit/integration tests (rules engine, RAG helpers, agent graph, API/SSE contracts)
-scripts/                  One-off scripts (e.g. smoke_pec_waiting.py)
-notes/                    Dated working notes (not project docs)
-requirements.txt          Python deps (FastAPI, SQLAlchemy async, LangChain/LangGraph, Qdrant, etc.)
-pytest.ini                Pytest config
-PROJECT.md                 Full product/architecture writeup — the primary reference doc
-```
+LangGraph agentic chat. This file is the sole standing reference doc for the repo (there
+used to be a separate `PROJECT.md`; it was deliberately removed as redundant with this
+file — don't recreate it).
 
 ## Stack
 
-- **Backend**: FastAPI, SQLAlchemy (async, `asyncpg`), Alembic, Pydantic v2, JWT auth
-  (`python-jose`), `passlib`/`bcrypt<4.1`, Redis, Qdrant, LangChain + LangGraph, BM25
-  (`rank-bm25`), `pypdf`. Python 3.11 in `.venv`.
-- **Frontend**: Next.js (App Router), TypeScript, calls the API via `NEXT_PUBLIC_API_URL`.
-- **Infra**: Postgres 16, Redis 7, Qdrant 1.12 via Docker Compose (`infra/docker-compose.yml`).
-  Ollama (external, Mac Studio) provides OpenAI-compatible chat + embeddings.
+Ollama (chat + embeddings, OpenAI-compatible API) runs externally on a Mac Studio — not
+discoverable from any manifest in this repo. Everything else (FastAPI/SQLAlchemy on the
+backend, Next.js on the frontend, Postgres/Redis/Qdrant in `infra/docker-compose.yml`) is
+standard and listed in `requirements.txt`/`package.json`.
 
 ## Running things
 
@@ -76,20 +35,73 @@ pytest -q
 ```
 
 Local dev defaults to `AUTO_CREATE_TABLES=true` (SQLAlchemy `create_all`); Docker/prod
-uses Alembic only (`alembic upgrade head`, `AUTO_CREATE_TABLES=false`). See `PROJECT.md`
-"How to run" for full details, seed users, and the Phase 2 smoke path.
+uses Alembic only (`alembic upgrade head`, `AUTO_CREATE_TABLES=false`).
+
+Demo accounts seeded by `backend/db/seed.py` (password `password123` for all):
+`employer@acme.com` (employer_admin), `admin@healthfirst.com` / `admin@medicare.com`
+(healthcare_org_admin), `platform@benefits.com` (platform_admin).
+
+## Architectural boundaries
+
+- **Protocol**: REST under `/api/v1` (one resource collection per aggregate: `plans`,
+  `comparisons`, `documents`, `organizations`, `users`) + **SSE** for the two streaming
+  routes (`/rag/query`, `/agents/chat`). No GraphQL — the domain is a small, clearly
+  bounded set of resources; SSE streaming would only be complicated by a subscriptions
+  layer on top of it. Revisit only if the frontend needs arbitrary cross-resource nested
+  queries.
+- **Frontend ↔ backend**: Next.js is a pure API client — no BFF business logic, no direct
+  DB/Qdrant/Redis access from `frontend/`. All domain and RBAC logic stays server-side in
+  `backend/`.
+- **RBAC boundary**: `backend/core/policies.py` is the single source of truth for who can
+  see what (pricing visibility, own-org scoping, comparison access). Frontend role-based
+  routing (`src/lib/auth.ts` → `homeForRole`) is UX convenience only, never a security
+  boundary — never gate a sensitive field on the client alone.
+- **Rules engine vs LLM boundary**: eligibility/scoring is deterministic and must never be
+  inferred by an LLM (see `backend/domain/rules_engine/engine.py`, versioned in
+  `audit_trace`). The `compare` LangGraph subgraph always calls `run_comparison` before
+  generating any narrative. RAG narratives must stay grounded in retrieved policy text and
+  must never surface pricing.
+- **State on the frontend** (target shape — the current client in `src/lib/api.ts` is
+  plain `fetch` with no cache/invalidation layer yet): server state (plans, comparisons,
+  org profile) via a query/cache layer (e.g. TanStack Query) wrapping the existing typed
+  fetch functions; auth/session state via a small React context, not ad-hoc
+  `localStorage` reads scattered across components; local UI state via plain
+  `useState`/`useReducer`. Don't reach for a global store (Redux/Zustand) at this scale.
+- **Auth**: short-lived (15 min) JWT access token + rotating, revocable refresh token
+  (30 day, hashed server-side in `refresh_tokens`, single-use with reuse detection),
+  delivered as httpOnly cookies (`backend/api/v1/auth.py`); no token is ever stored in
+  browser `localStorage` or JS-readable. `get_security_context`
+  (`backend/api/deps.py`) also still accepts a plain `Authorization: Bearer` header, so
+  non-browser clients (`scripts/smoke_pec_waiting.py`, Swagger UI) are unaffected.
+  Dev gotcha: `SameSite=Lax` cookies only flow between frontend and backend when both are
+  addressed via `localhost` (not `127.0.0.1` — browsers treat those as different sites).
+- **Versioning**: API versioned by path (`/api/v1`); bump the path segment for breaking
+  changes rather than content negotiation.
+
+## Known gaps (productionization, not comparison logic)
+
+The rules engine, RAG pipeline, and agentic chat already work end-to-end. What's missing
+is SaaS hardening:
+
+- Tenancy/billing: no subscription tiers, no Stripe, no per-org usage limits (careful:
+  "plans" in a billing sense would collide in naming with insurance `plans` — pick a
+  distinct term, e.g. `subscription_tiers`).
+- Auth hardening is done (see "Auth" above); still missing: email verification,
+  password reset, invite-based provider onboarding.
+- No CI (lint/type-check/test) wired up for this repo.
+- No rate limiting on auth or the LLM-backed routes (`/rag/query`, `/agents/chat`) — the
+  most expensive endpoints to leave unprotected.
+- No generated TypeScript client from the FastAPI OpenAPI schema — `frontend/src/lib/types.ts`
+  is hand-maintained and can drift from `backend/schemas/`.
+- Seed data (`backend/db/seed.py`) is a single hardcoded demo tenant, not a factory for
+  varied demo/load-test tenants.
 
 ## Conventions / notes for future work
 
 - Role-based access is centralized in `backend/core/policies.py` — check there before
   adding any new visibility rule (pricing hidden from employers, providers see only their
   own plans, etc.).
-- The rules engine (`backend/domain/rules_engine/engine.py`) is deterministic and
-  versioned (`1.0.0` in `audit_trace`); eligibility/scoring must never be inferred by the
-  LLM — the `compare` LangGraph subgraph always calls `run_comparison` before generating.
-- RAG-generated narratives must stay grounded in retrieved policy text and must never
-  include pricing.
 - `backend/comparison/rules_engine/` is an empty stale directory; the real engine is
-  `backend/domain/rules_engine/engine.py`.
-- Update `PROJECT.md` (not this file) when product scope, endpoints, or data model change;
-  keep this file limited to orientation for coding agents.
+  `backend/domain/rules_engine/engine.py` (see "Rules engine vs LLM boundary" above).
+- Keep this file updated as product scope, endpoints, or the data model change — it's the
+  only standing reference doc for this repo now.
