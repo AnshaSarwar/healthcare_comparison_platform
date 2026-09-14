@@ -75,6 +75,35 @@ Demo accounts seeded by `backend/db/seed.py` (password `password123` for all):
   non-browser clients (`scripts/smoke_pec_waiting.py`, Swagger UI) are unaffected.
   Dev gotcha: `SameSite=Lax` cookies only flow between frontend and backend when both are
   addressed via `localhost` (not `127.0.0.1` — browsers treat those as different sites).
+  - **Email verification**: `POST /auth/register` creates the user with
+    `email_verified=false` and fires a verification email (see below); confirm via
+    `POST /auth/email/verify {token}`, resend via
+    `POST /auth/email/resend-verification {email}` (always 202, no user enumeration).
+    Verification is advisory, not a login gate — `/auth/me` exposes `email_verified` for
+    the frontend to nag on, but an unverified user can still sign in. Seeded demo users
+    (`backend/db/seed.py`) are pre-verified.
+  - **Password reset**: `POST /auth/password-reset/request {email}` (always 202) emails a
+    short-lived (30 min) single-use token; `POST /auth/password-reset/confirm {token,
+    new_password}` sets the new password and revokes every existing refresh token for
+    that user (forces re-login everywhere, treating a reset as compromise recovery).
+  - **Invite-based provider onboarding**: healthcare providers can no longer
+    self-register — `POST /auth/register` now only accepts `org_type=employer`
+    (`backend/services/admin.py::register_tenant` rejects `healthcare_provider`). A
+    platform admin creates an invite (`POST /invites`, platform-admin only) which emails
+    a link; the invitee previews it via `GET /auth/invites/{token}` and accepts via
+    `POST /auth/invites/{token}/accept {password}`, which creates the org +
+    `HealthcareProvider` profile + a pre-verified `healthcare_org_admin` user and logs
+    them in. Manage invites via `GET /invites` / `POST /invites/{id}/revoke`. Token
+    issuance/consumption for all three flows lives in `backend/services/auth_flows.py`
+    (kept separate from `backend/services/admin.py`'s tenant CRUD).
+  - **Email delivery**: `backend/core/email.py`. No SMTP provider is wired up in
+    `infra/docker-compose.yml`, so the default `EMAIL_BACKEND=console` just logs the
+    message (the token is visible in API logs for local dev). Set `EMAIL_BACKEND=smtp`
+    plus the `SMTP_*` settings for a real provider — it uses stdlib `smtplib`, not a
+    vendor SDK, so any standard SMTP endpoint works. Links are built from
+    `FRONTEND_BASE_URL` (e.g. `{FRONTEND_BASE_URL}/verify-email?token=...`) but the
+    corresponding frontend pages (`/verify-email`, `/reset-password`, `/accept-invite`,
+    `/forgot-password`) are not built yet — backend-only so far.
 - **Versioning**: API versioned by path (`/api/v1`); bump the path segment for breaking
   changes rather than content negotiation.
 
@@ -86,8 +115,12 @@ is SaaS hardening:
 - Tenancy/billing: no subscription tiers, no Stripe, no per-org usage limits (careful:
   "plans" in a billing sense would collide in naming with insurance `plans` — pick a
   distinct term, e.g. `subscription_tiers`).
-- Auth hardening is done (see "Auth" above); still missing: email verification,
-  password reset, invite-based provider onboarding.
+- Auth hardening, email verification, password reset, and invite-based provider
+  onboarding are done (see "Auth" above). Still missing: the frontend pages that consume
+  those endpoints (verify-email, forgot/reset-password, accept-invite), and a real
+  transactional-email provider wired into `infra/docker-compose.yml` (currently just
+  console-logs in dev; `EMAIL_BACKEND=smtp` works but nothing runs an SMTP server
+  locally).
 - CI is done: `.github/workflows/ci.yml` runs ruff + pytest (backend) and
   eslint + `tsc --noEmit` (frontend) on every push/PR. Ruff config lives in the root
   `pyproject.toml`.
