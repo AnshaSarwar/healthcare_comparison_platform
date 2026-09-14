@@ -15,6 +15,8 @@ from backend.schemas import (
     PlanVersionCreateRequest,
     PlanVersionRead,
     PlanVersionReviewRequest,
+    ProviderInviteCreateRequest,
+    ProviderInviteRead,
     TokenResponse,
     UserRead,
 )
@@ -31,6 +33,7 @@ from backend.schemas.admin import (
     UserCreateRequest,
 )
 from backend.services import admin as admin_service
+from backend.services import auth_flows
 
 router = APIRouter(tags=["admin"])
 
@@ -38,7 +41,7 @@ router = APIRouter(tags=["admin"])
 def _http_error(exc: Exception) -> HTTPException:
     if isinstance(exc, AccessDeniedError):
         return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
-    if isinstance(exc, admin_service.AdminServiceError):
+    if isinstance(exc, (admin_service.AdminServiceError, auth_flows.AuthFlowError)):
         code = status.HTTP_400_BAD_REQUEST
         if "not found" in str(exc).lower():
             code = status.HTTP_404_NOT_FOUND
@@ -237,3 +240,48 @@ async def create_user(
     except Exception as exc:
         raise _http_error(exc) from exc
     return UserRead.model_validate(user)
+
+
+@router.post("/invites", response_model=ProviderInviteRead, status_code=status.HTTP_201_CREATED)
+async def create_invite(
+    body: ProviderInviteCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    ctx: SecurityContext = Depends(get_security_context),
+) -> ProviderInviteRead:
+    try:
+        invite = await auth_flows.create_provider_invite(db, ctx, body)
+    except Exception as exc:
+        raise _http_error(exc) from exc
+    return ProviderInviteRead(
+        id=invite.id,
+        email=invite.email,
+        organization_name=invite.organization_name,
+        profile_name=invite.profile_name,
+        status="pending",
+        created_at=invite.created_at,
+        expires_at=invite.expires_at,
+        accepted_at=invite.accepted_at,
+    )
+
+
+@router.get("/invites", response_model=list[ProviderInviteRead])
+async def list_invites(
+    db: AsyncSession = Depends(get_db),
+    ctx: SecurityContext = Depends(get_security_context),
+) -> list[ProviderInviteRead]:
+    try:
+        return await auth_flows.list_provider_invites(db, ctx)
+    except Exception as exc:
+        raise _http_error(exc) from exc
+
+
+@router.post("/invites/{invite_id}/revoke", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_invite(
+    invite_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    ctx: SecurityContext = Depends(get_security_context),
+) -> None:
+    try:
+        await auth_flows.revoke_provider_invite(db, ctx, invite_id)
+    except Exception as exc:
+        raise _http_error(exc) from exc

@@ -36,21 +36,26 @@ def create_access_token(user_id: UUID, role: UserRole, organization_id: UUID) ->
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
-def generate_refresh_token() -> str:
+def generate_secure_token() -> str:
+    """Random URL-safe token used for refresh, verification, reset, and invite tokens.
+
+    Only the sha256 hash is ever persisted (see `hash_secure_token`); the raw value is
+    emailed to the user once and never stored.
+    """
     return secrets.token_urlsafe(48)
 
 
-def hash_refresh_token(raw: str) -> str:
+def hash_secure_token(raw: str) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 async def issue_refresh_token(session: AsyncSession, user_id: UUID) -> str:
-    raw = generate_refresh_token()
+    raw = generate_secure_token()
     expires_at = datetime.now(UTC) + timedelta(days=settings.refresh_token_expire_days)
     session.add(
         RefreshToken(
             user_id=user_id,
-            token_hash=hash_refresh_token(raw),
+            token_hash=hash_secure_token(raw),
             expires_at=expires_at,
         )
     )
@@ -61,7 +66,7 @@ async def issue_refresh_token(session: AsyncSession, user_id: UUID) -> str:
 async def rotate_refresh_token(
     session: AsyncSession, raw_token: str
 ) -> tuple[str, User] | None:
-    token_hash = hash_refresh_token(raw_token)
+    token_hash = hash_secure_token(raw_token)
     result = await session.execute(
         select(RefreshToken).where(RefreshToken.token_hash == token_hash)
     )
@@ -86,10 +91,10 @@ async def rotate_refresh_token(
     if user is None:
         return None
 
-    new_raw = generate_refresh_token()
+    new_raw = generate_secure_token()
     new_token = RefreshToken(
         user_id=user.id,
-        token_hash=hash_refresh_token(new_raw),
+        token_hash=hash_secure_token(new_raw),
         expires_at=now + timedelta(days=settings.refresh_token_expire_days),
     )
     session.add(new_token)
@@ -102,7 +107,7 @@ async def rotate_refresh_token(
 
 
 async def revoke_refresh_token(session: AsyncSession, raw_token: str) -> None:
-    token_hash = hash_refresh_token(raw_token)
+    token_hash = hash_secure_token(raw_token)
     await session.execute(
         update(RefreshToken)
         .where(RefreshToken.token_hash == token_hash, RefreshToken.revoked_at.is_(None))

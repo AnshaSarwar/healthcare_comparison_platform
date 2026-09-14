@@ -37,6 +37,7 @@ from backend.schemas.admin import (
     UserCreateRequest,
 )
 from backend.schemas.policy import PlanVersionCreateRequest, PlanVersionReviewRequest
+from backend.services import auth_flows
 from backend.services.plan import serialize_plan
 
 
@@ -58,56 +59,54 @@ async def get_me(session: AsyncSession, ctx: SecurityContext) -> MeResponse:
         organization_id=user.organization_id,
         organization_name=user.organization.name,
         org_type=user.organization.org_type,
+        email_verified=user.email_verified,
     )
 
 
 async def register_tenant(session: AsyncSession, body: RegisterRequest) -> User:
+    if body.org_type != OrganizationType.EMPLOYER:
+        # Healthcare providers are vetted and onboarded via platform-admin invite (see
+        # backend/services/auth_flows.py) rather than open self-registration.
+        raise AdminServiceError(
+            "Healthcare providers must be onboarded via an invite from a platform admin"
+        )
+
     existing = await session.execute(select(User).where(User.email == body.email))
     if existing.scalar_one_or_none() is not None:
         raise AdminServiceError("Email already registered")
-
-    if body.org_type == OrganizationType.EMPLOYER:
-        role = UserRole.EMPLOYER_ADMIN
-    elif body.org_type == OrganizationType.HEALTHCARE_PROVIDER:
-        role = UserRole.HEALTHCARE_ORG_ADMIN
-    else:
-        raise AdminServiceError("Unsupported organization type for self-registration")
 
     org = Organization(id=uuid4(), name=body.organization_name, org_type=body.org_type)
     session.add(org)
     await session.flush()
 
-    if body.org_type == OrganizationType.EMPLOYER:
-        session.add(
-            Employer(
-                id=uuid4(),
-                organization_id=org.id,
-                name=body.profile_name,
-                demographics={"age_bands": [], "department_breakdown": {}, "total_dependents": 0},
-                requirements={
-                    "budget_ceiling_per_employee": 500,
-                    "must_have_coverage_types": ["opd_ipd"],
-                    "min_headcount": 1,
-                    "maternity_required": False,
-                    "pre_existing_coverage_required": False,
-                },
-            )
+    session.add(
+        Employer(
+            id=uuid4(),
+            organization_id=org.id,
+            name=body.profile_name,
+            demographics={"age_bands": [], "department_breakdown": {}, "total_dependents": 0},
+            requirements={
+                "budget_ceiling_per_employee": 500,
+                "must_have_coverage_types": ["opd_ipd"],
+                "min_headcount": 1,
+                "maternity_required": False,
+                "pre_existing_coverage_required": False,
+            },
         )
-    else:
-        session.add(
-            HealthcareProvider(id=uuid4(), organization_id=org.id, name=body.profile_name)
-        )
+    )
 
     user = User(
         id=uuid4(),
         email=body.email,
         hashed_password=hash_password(body.password),
-        role=role,
+        role=UserRole.EMPLOYER_ADMIN,
         organization_id=org.id,
     )
     session.add(user)
     await session.commit()
     await session.refresh(user)
+
+    await auth_flows.send_verification_email(session, user)
     return user
 
 

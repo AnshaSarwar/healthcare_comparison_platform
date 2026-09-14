@@ -119,24 +119,28 @@ async def seed_data(session: AsyncSession) -> None:
             hashed_password=hash_password("password123"),
             role=UserRole.EMPLOYER_ADMIN,
             organization_id=employer_org.id,
+            email_verified=True,
         ),
         User(
             email="admin@healthfirst.com",
             hashed_password=hash_password("password123"),
             role=UserRole.HEALTHCARE_ORG_ADMIN,
             organization_id=provider_a_org.id,
+            email_verified=True,
         ),
         User(
             email="admin@medicare.com",
             hashed_password=hash_password("password123"),
             role=UserRole.HEALTHCARE_ORG_ADMIN,
             organization_id=provider_b_org.id,
+            email_verified=True,
         ),
         User(
             email="platform@benefits.com",
             hashed_password=hash_password("password123"),
             role=UserRole.PLATFORM_ADMIN,
             organization_id=employer_org.id,
+            email_verified=True,
         ),
     ]
     session.add_all(users)

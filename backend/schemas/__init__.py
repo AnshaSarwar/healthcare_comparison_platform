@@ -1,5 +1,16 @@
 from backend.schemas.agent import AgentChatRequest, AgentChatResponse
-from backend.schemas.auth import LoginRequest, TokenResponse
+from backend.schemas.auth import (
+    LoginRequest,
+    PasswordResetConfirmRequest,
+    PasswordResetRequest,
+    ProviderInviteAcceptRequest,
+    ProviderInviteCreateRequest,
+    ProviderInvitePreview,
+    ProviderInviteRead,
+    ResendVerificationRequest,
+    TokenResponse,
+    VerifyEmailRequest,
+)
 from backend.schemas.comparison import (
     ComparisonCreateRequest,
     ComparisonRequestRead,
@@ -35,6 +46,14 @@ from backend.schemas.rag import (
 __all__ = [
     "LoginRequest",
     "TokenResponse",
+    "VerifyEmailRequest",
+    "ResendVerificationRequest",
+    "PasswordResetRequest",
+    "PasswordResetConfirmRequest",
+    "ProviderInviteCreateRequest",
+    "ProviderInvitePreview",
+    "ProviderInviteAcceptRequest",
+    "ProviderInviteRead",
     "AgeBand",
     "EmployeeDemographics",
     "EmployerRequirements",

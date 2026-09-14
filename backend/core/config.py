@@ -21,6 +21,21 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 30
+    email_verification_token_expire_hours: int = 24
+    password_reset_token_expire_minutes: int = 30
+    provider_invite_token_expire_days: int = 7
+    frontend_base_url: str = Field(
+        default="http://localhost:3100",
+        description="Used to build links in verification/reset/invite emails",
+    )
+    # console: log the email (dev default, no SMTP needed). smtp: send via smtp_* settings.
+    email_backend: str = "console"
+    email_from: str = "no-reply@benefits-compare.local"
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_use_tls: bool = True
     openai_api_key: str = ""
     ollama_base_url: str = ""
     ollama_chat_model: str = "mistral-small3.2:latest"
@@ -52,6 +67,21 @@ class Settings(BaseSettings):
     )
     rate_limit_logout: str = Field(
         default="20/minute", description="Per-IP limit for POST /auth/logout"
+    )
+    rate_limit_resend_verification: str = Field(
+        default="3/minute", description="Per-IP limit for POST /auth/email/resend-verification"
+    )
+    rate_limit_verify_email: str = Field(
+        default="10/minute", description="Per-IP limit for POST /auth/email/verify"
+    )
+    rate_limit_password_reset_request: str = Field(
+        default="3/minute", description="Per-IP limit for POST /auth/password-reset/request"
+    )
+    rate_limit_password_reset_confirm: str = Field(
+        default="10/minute", description="Per-IP limit for POST /auth/password-reset/confirm"
+    )
+    rate_limit_invite_accept: str = Field(
+        default="10/minute", description="Per-IP limit for the public invite-lookup/accept routes"
     )
     rate_limit_rag_query: str = Field(
         default="10/minute",

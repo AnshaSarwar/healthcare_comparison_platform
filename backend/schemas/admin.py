@@ -26,6 +26,7 @@ class MeResponse(BaseModel):
     organization_id: UUID
     organization_name: str
     org_type: OrganizationType
+    email_verified: bool
 
 
 class EmployerUpdateRequest(BaseModel):

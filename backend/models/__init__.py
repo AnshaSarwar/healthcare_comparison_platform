@@ -2,13 +2,16 @@ from backend.models.base import Base
 from backend.models.entities import (
     ComparisonRequest,
     ComparisonResult,
+    EmailVerificationToken,
     Employer,
     HealthcareProvider,
     Hospital,
     Organization,
+    PasswordResetToken,
     Plan,
     PlanDocument,
     PlanVersion,
+    ProviderInvite,
     RefreshToken,
     User,
 )
@@ -26,4 +29,7 @@ __all__ = [
     "ComparisonRequest",
     "ComparisonResult",
     "RefreshToken",
+    "EmailVerificationToken",
+    "PasswordResetToken",
+    "ProviderInvite",
 ]
