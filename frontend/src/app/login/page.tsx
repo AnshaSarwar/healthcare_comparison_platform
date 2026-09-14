@@ -78,7 +78,8 @@ function LoginForm() {
           password123
         </p>
         <p className="hint">
-          New org? <Link href="/register">Register</Link>
+          New employer? <Link href="/register">Register</Link> ·{" "}
+          <Link href="/forgot-password">Forgot password?</Link>
         </p>
       </form>
     </div>

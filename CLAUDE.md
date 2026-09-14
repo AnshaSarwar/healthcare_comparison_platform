@@ -101,9 +101,10 @@ Demo accounts seeded by `backend/db/seed.py` (password `password123` for all):
     message (the token is visible in API logs for local dev). Set `EMAIL_BACKEND=smtp`
     plus the `SMTP_*` settings for a real provider — it uses stdlib `smtplib`, not a
     vendor SDK, so any standard SMTP endpoint works. Links are built from
-    `FRONTEND_BASE_URL` (e.g. `{FRONTEND_BASE_URL}/verify-email?token=...`) but the
-    corresponding frontend pages (`/verify-email`, `/reset-password`, `/accept-invite`,
-    `/forgot-password`) are not built yet — backend-only so far.
+    `FRONTEND_BASE_URL` (e.g. `{FRONTEND_BASE_URL}/verify-email?token=...`); the
+    corresponding pages (`frontend/src/app/{verify-email,forgot-password,reset-password,
+    accept-invite}/`) consume them, plus an unverified-email nudge banner in `AppShell`
+    (resend button) and a provider-invite management panel on the platform admin page.
 - **Versioning**: API versioned by path (`/api/v1`); bump the path segment for breaking
   changes rather than content negotiation.
 
@@ -116,9 +117,8 @@ is SaaS hardening:
   "plans" in a billing sense would collide in naming with insurance `plans` — pick a
   distinct term, e.g. `subscription_tiers`).
 - Auth hardening, email verification, password reset, and invite-based provider
-  onboarding are done (see "Auth" above). Still missing: the frontend pages that consume
-  those endpoints (verify-email, forgot/reset-password, accept-invite), and a real
-  transactional-email provider wired into `infra/docker-compose.yml` (currently just
+  onboarding are done end-to-end (backend + frontend, see "Auth" above). Still missing: a
+  real transactional-email provider wired into `infra/docker-compose.yml` (currently just
   console-logs in dev; `EMAIL_BACKEND=smtp` works but nothing runs an SMTP server
   locally).
 - CI is done: `.github/workflows/ci.yml` runs ruff + pytest (backend) and

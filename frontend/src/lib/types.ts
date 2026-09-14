@@ -66,6 +66,27 @@ export interface MeUser {
   organization_id: string;
   organization_name: string;
   org_type: OrganizationType;
+  email_verified: boolean;
+}
+
+export type ProviderInviteStatus = "pending" | "accepted" | "revoked" | "expired";
+
+export interface ProviderInvite {
+  id: string;
+  email: string;
+  organization_name: string;
+  profile_name: string;
+  status: ProviderInviteStatus;
+  created_at: string;
+  expires_at: string;
+  accepted_at: string | null;
+}
+
+export interface ProviderInvitePreview {
+  email: string;
+  organization_name: string;
+  profile_name: string;
+  expires_at: string;
 }
 
 export interface EmployerProfile {

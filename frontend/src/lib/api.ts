@@ -9,6 +9,8 @@ import type {
   Plan,
   PlanTerms,
   PricingTier,
+  ProviderInvite,
+  ProviderInvitePreview,
   ProviderProfile,
   CoverageType,
   PlanVersion,
@@ -124,6 +126,70 @@ export async function logout(): Promise<void> {
 
 export async function fetchMe(): Promise<MeUser> {
   return request<MeUser>("/api/v1/auth/me");
+}
+
+export async function verifyEmail(token: string): Promise<void> {
+  await request<void>(
+    "/api/v1/auth/email/verify",
+    { method: "POST", body: JSON.stringify({ token }) },
+    false,
+  );
+}
+
+export async function resendVerification(email: string): Promise<void> {
+  await request<void>(
+    "/api/v1/auth/email/resend-verification",
+    { method: "POST", body: JSON.stringify({ email }) },
+    false,
+  );
+}
+
+export async function requestPasswordReset(email: string): Promise<void> {
+  await request<void>(
+    "/api/v1/auth/password-reset/request",
+    { method: "POST", body: JSON.stringify({ email }) },
+    false,
+  );
+}
+
+export async function confirmPasswordReset(token: string, newPassword: string): Promise<void> {
+  await request<void>(
+    "/api/v1/auth/password-reset/confirm",
+    { method: "POST", body: JSON.stringify({ token, new_password: newPassword }) },
+    false,
+  );
+}
+
+export async function previewInvite(token: string): Promise<ProviderInvitePreview> {
+  return request<ProviderInvitePreview>(`/api/v1/auth/invites/${token}`, {}, false);
+}
+
+export async function acceptInvite(token: string, password: string): Promise<string> {
+  const data = await request<{ access_token: string }>(
+    `/api/v1/auth/invites/${token}/accept`,
+    { method: "POST", body: JSON.stringify({ password }) },
+    false,
+  );
+  return data.access_token;
+}
+
+export async function createInvite(body: {
+  email: string;
+  organization_name: string;
+  profile_name: string;
+}): Promise<ProviderInvite> {
+  return request<ProviderInvite>("/api/v1/invites", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function listInvites(): Promise<ProviderInvite[]> {
+  return request<ProviderInvite[]>("/api/v1/invites");
+}
+
+export async function revokeInvite(id: string): Promise<void> {
+  await request<void>(`/api/v1/invites/${id}/revoke`, { method: "POST" });
 }
 
 export async function getEmployerMe(): Promise<EmployerProfile> {

@@ -3,17 +3,30 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { logout as logoutApi } from "@/lib/api";
+import { logout as logoutApi, resendVerification } from "@/lib/api";
 import { clearSession, getMe, homeForRole, type StoredMe } from "@/lib/auth";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [me, setMeState] = useState<StoredMe | null>(null);
+  const [resendState, setResendState] = useState<"idle" | "sending" | "sent" | "error">("idle");
 
   useEffect(() => {
     setMeState(getMe());
+    setResendState("idle");
   }, [pathname]);
+
+  async function onResendVerification() {
+    if (!me) return;
+    setResendState("sending");
+    try {
+      await resendVerification(me.email);
+      setResendState("sent");
+    } catch {
+      setResendState("error");
+    }
+  }
 
   const role = me?.role;
   const nav =
@@ -90,7 +103,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           Home
         </button>
       </aside>
-      <main className="main">{children}</main>
+      <main className="main">
+        {me && !me.email_verified && (
+          <div className="warning-banner">
+            <span>Please verify your email address ({me.email}).</span>
+            {resendState === "sent" ? (
+              <span>Verification email sent.</span>
+            ) : (
+              <button
+                type="button"
+                className="btn-secondary btn"
+                style={{ padding: "6px 12px" }}
+                onClick={onResendVerification}
+                disabled={resendState === "sending"}
+              >
+                {resendState === "sending" ? "Sending…" : "Resend email"}
+              </button>
+            )}
+            {resendState === "error" && <span>Couldn&apos;t resend, try again shortly.</span>}
+          </div>
+        )}
+        {children}
+      </main>
     </div>
   );
 }

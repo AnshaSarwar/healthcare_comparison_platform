@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ApiError, fetchMe, register as registerApi } from "@/lib/api";
 import { homeForRole, setMe } from "@/lib/auth";
-import type { OrganizationType } from "@/lib/types";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -13,7 +12,6 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [organizationName, setOrganizationName] = useState("");
   const [profileName, setProfileName] = useState("");
-  const [orgType, setOrgType] = useState<OrganizationType>("employer");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -26,7 +24,7 @@ export default function RegisterPage() {
         email,
         password,
         organization_name: organizationName,
-        org_type: orgType,
+        org_type: "employer",
         profile_name: profileName,
       });
       const me = await fetchMe();
@@ -42,22 +40,12 @@ export default function RegisterPage() {
   return (
     <div className="center-screen">
       <form className="panel login-card" onSubmit={onSubmit} style={{ width: "min(480px, 100%)" }}>
-        <h1>Register organization</h1>
+        <h1>Register employer</h1>
         <p className="muted" style={{ marginTop: 0 }}>
-          Creates your organization, profile, and first admin user.
+          Creates your organization, profile, and first admin user. Healthcare providers
+          onboard via an invite from a platform admin instead of self-registering.
         </p>
         {error && <div className="error-banner">{error}</div>}
-        <div className="field">
-          <label htmlFor="orgType">Organization type</label>
-          <select
-            id="orgType"
-            value={orgType}
-            onChange={(e) => setOrgType(e.target.value as OrganizationType)}
-          >
-            <option value="employer">Employer</option>
-            <option value="healthcare_provider">Healthcare provider</option>
-          </select>
-        </div>
         <div className="field">
           <label htmlFor="orgName">Organization name</label>
           <input

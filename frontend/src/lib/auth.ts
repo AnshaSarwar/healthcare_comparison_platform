@@ -7,6 +7,7 @@ export type StoredMe = {
   organization_id: string;
   organization_name: string;
   org_type: "employer" | "healthcare_provider";
+  email_verified: boolean;
 };
 
 export function getMe(): StoredMe | null {

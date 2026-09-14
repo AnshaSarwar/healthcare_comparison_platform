@@ -3,14 +3,18 @@
 import { FormEvent, useEffect, useState } from "react";
 import {
   ApiError,
+  createInvite,
   createOrganization,
   createUser,
+  listInvites,
   listOrganizations,
+  revokeInvite,
 } from "@/lib/api";
-import type { Organization, OrganizationType } from "@/lib/types";
+import type { Organization, OrganizationType, ProviderInvite } from "@/lib/types";
 
 export default function PlatformPage() {
   const [orgs, setOrgs] = useState<Organization[]>([]);
+  const [invites, setInvites] = useState<ProviderInvite[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [orgName, setOrgName] = useState("");
   const [profileName, setProfileName] = useState("");
@@ -19,6 +23,10 @@ export default function PlatformPage() {
   const [userPassword, setUserPassword] = useState("password123");
   const [userOrgId, setUserOrgId] = useState("");
   const [userRole, setUserRole] = useState("employer_admin");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteOrgName, setInviteOrgName] = useState("");
+  const [inviteProfileName, setInviteProfileName] = useState("");
+  const [inviteMessage, setInviteMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   async function refresh() {
@@ -27,17 +35,22 @@ export default function PlatformPage() {
     if (!userOrgId && data[0]) setUserOrgId(data[0].id);
   }
 
+  async function refreshInvites() {
+    setInvites(await listInvites());
+  }
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const data = await listOrganizations();
+        const [orgData, inviteData] = await Promise.all([listOrganizations(), listInvites()]);
         if (cancelled) return;
-        setOrgs(data);
-        if (data[0]) setUserOrgId(data[0].id);
+        setOrgs(orgData);
+        setInvites(inviteData);
+        if (orgData[0]) setUserOrgId(orgData[0].id);
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof ApiError ? err.message : "Failed to load organizations");
+          setError(err instanceof ApiError ? err.message : "Failed to load platform data");
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -47,6 +60,36 @@ export default function PlatformPage() {
       cancelled = true;
     };
   }, []);
+
+  async function onCreateInvite(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setInviteMessage(null);
+    try {
+      await createInvite({
+        email: inviteEmail,
+        organization_name: inviteOrgName,
+        profile_name: inviteProfileName,
+      });
+      setInviteEmail("");
+      setInviteOrgName("");
+      setInviteProfileName("");
+      setInviteMessage("Invite sent.");
+      await refreshInvites();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Create invite failed");
+    }
+  }
+
+  async function onRevokeInvite(id: string) {
+    setError(null);
+    try {
+      await revokeInvite(id);
+      await refreshInvites();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Revoke failed");
+    }
+  }
 
   async function onCreateOrg(e: FormEvent) {
     e.preventDefault();
@@ -99,6 +142,90 @@ export default function PlatformPage() {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="panel" style={{ marginBottom: 18 }}>
+        <h2 style={{ marginTop: 0, fontFamily: "var(--font-display)" }}>Provider invites</h2>
+        <p className="muted" style={{ marginTop: 0 }}>
+          Healthcare providers onboard by invite only. Sending one emails a one-time link
+          that lets the invitee set a password and create their org.
+        </p>
+        {invites.length === 0 ? (
+          <p className="muted">No invites yet.</p>
+        ) : (
+          <table className="rank-table" style={{ marginBottom: 18 }}>
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Organization</th>
+                <th>Status</th>
+                <th>Expires</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {invites.map((invite) => (
+                <tr key={invite.id}>
+                  <td>{invite.email}</td>
+                  <td>{invite.organization_name}</td>
+                  <td>
+                    <span className="chip">{invite.status}</span>
+                  </td>
+                  <td className="muted">{new Date(invite.expires_at).toLocaleDateString()}</td>
+                  <td>
+                    {invite.status === "pending" && (
+                      <button
+                        type="button"
+                        className="btn-secondary btn"
+                        style={{ padding: "6px 12px" }}
+                        onClick={() => onRevokeInvite(invite.id)}
+                      >
+                        Revoke
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        <form onSubmit={onCreateInvite}>
+          {inviteMessage && <div className="success-banner">{inviteMessage}</div>}
+          <div className="form-grid">
+            <div className="field">
+              <label htmlFor="inviteEmail">Invitee email</label>
+              <input
+                id="inviteEmail"
+                type="email"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                required
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="inviteOrgName">Organization name</label>
+              <input
+                id="inviteOrgName"
+                value={inviteOrgName}
+                onChange={(e) => setInviteOrgName(e.target.value)}
+                required
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="inviteProfileName">Profile name</label>
+              <input
+                id="inviteProfileName"
+                value={inviteProfileName}
+                onChange={(e) => setInviteProfileName(e.target.value)}
+                required
+              />
+            </div>
+          </div>
+          <button className="btn" type="submit">
+            Send invite
+          </button>
+        </form>
       </section>
 
       <form className="panel" onSubmit={onCreateOrg} style={{ marginBottom: 18 }}>
