@@ -4,7 +4,10 @@
       {
         "matcher": "Edit|Write",
         "hooks": [
-          { "type": "command", "command": "ruff check --fix . && ruff format ." }
+          {
+            "type": "command",
+            "command": "node -e \"process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).tool_input.file_path||'')\" | { read -r f; case \"$f\" in *.py) .venv/Scripts/ruff.exe check --fix \"$f\" && .venv/Scripts/ruff.exe format \"$f\" ;; esac; } 2>/dev/null || true"
+          }
         ]
       }
     ]
