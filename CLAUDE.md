@@ -144,8 +144,18 @@ is SaaS hardening:
   `/auth/refresh`, `/auth/logout` (per-IP) and `/rag/query`, `/agents/chat` (per
   authenticated user). Thresholds are tunable via `Settings.rate_limit_*`, not
   hardcoded in route files.
-- Seed data (`backend/db/seed.py`) is a single hardcoded demo tenant, not a factory for
-  varied demo/load-test tenants.
+- Seed data is done: `backend/db/seed.py` keeps the original hand-authored Acme/
+  HealthFirst/MediCare demo dataset (same emails as before) but is now a `SeedConfig`-
+  driven factory layered on top of it. `SeedConfig.demo()` adds a small amount of extra
+  generated variety (coverage types, a zero-plan provider edge case); `SeedConfig.load_test
+  (tenant_count=...)` generates large synthetic tenant counts for load testing. CLI:
+  `python -m backend.db.seed --mode {demo,load-test} --tenant-count N --provider-count N
+  --seed N [--database-url ... --create-tables]`. Idempotent by construction — entities
+  are keyed by a deterministic name derived from `--seed` + index, and re-running with the
+  same config skips organizations that already exist instead of duplicating them. Tests in
+  `tests/test_seed.py` run against a dedicated scratch DB (`benefits_compare_seedtest`,
+  provisioned/torn down by `tests/conftest.py` on the same local Postgres instance —
+  never the real `benefits_compare` dev DB).
 
 ## Conventions / notes for future work
 
