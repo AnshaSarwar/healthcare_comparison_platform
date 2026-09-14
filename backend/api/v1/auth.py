@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.deps import get_db
 from backend.core.config import get_settings
+from backend.core.rate_limit import limiter, setting_limit
 from backend.core.security import (
     authenticate_user,
     create_access_token,
@@ -47,8 +48,9 @@ def clear_auth_cookies(response: Response) -> None:
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit(setting_limit("rate_limit_login"))
 async def login(
-    body: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)
+    request: Request, body: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)
 ) -> TokenResponse:
     user = await authenticate_user(db, body.email, body.password)
     if user is None:
@@ -64,6 +66,7 @@ async def login(
 
 
 @router.post("/refresh", response_model=TokenResponse)
+@limiter.limit(setting_limit("rate_limit_refresh"))
 async def refresh(
     request: Request, response: Response, db: AsyncSession = Depends(get_db)
 ) -> TokenResponse:
@@ -89,6 +92,7 @@ async def refresh(
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(setting_limit("rate_limit_logout"))
 async def logout(
     request: Request, response: Response, db: AsyncSession = Depends(get_db)
 ) -> None:

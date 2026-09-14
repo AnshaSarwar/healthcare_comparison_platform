@@ -1,11 +1,12 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.deps import get_db, get_security_context
 from backend.api.v1.auth import set_auth_cookies
 from backend.core.policies import AccessDeniedError, SecurityContext
+from backend.core.rate_limit import limiter, setting_limit
 from backend.core.security import create_access_token, issue_refresh_token
 from backend.schemas import (
     EmployerRead,
@@ -46,8 +47,9 @@ def _http_error(exc: Exception) -> HTTPException:
 
 
 @router.post("/auth/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit(setting_limit("rate_limit_register"))
 async def register(
-    body: RegisterRequest, response: Response, db: AsyncSession = Depends(get_db)
+    request: Request, body: RegisterRequest, response: Response, db: AsyncSession = Depends(get_db)
 ) -> TokenResponse:
     try:
         user = await admin_service.register_tenant(db, body)

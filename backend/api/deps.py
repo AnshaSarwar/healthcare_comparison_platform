@@ -28,9 +28,15 @@ def get_security_context(request: Request) -> SecurityContext:
         )
 
     try:
-        return decode_access_token(token)
+        ctx = decode_access_token(token)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
         ) from exc
+
+    # Side effect for backend.core.rate_limit.user_or_ip_key: dependency
+    # resolution always completes before the endpoint (and slowapi's
+    # rate-limit check on it) runs, so this is reliably set in time.
+    request.state.rate_limit_user_id = str(ctx.user_id)
+    return ctx

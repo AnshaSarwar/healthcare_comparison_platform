@@ -38,6 +38,31 @@ class Settings(BaseSettings):
         description="Comma-separated browser origins allowed by CORS",
     )
 
+    # Rate limits (slowapi `limits`-style strings, e.g. "5/minute"). Applied to the
+    # auth endpoints and the two LLM-backed streaming endpoints, which are the most
+    # abuse-prone/expensive routes in the app. Tunable without touching route code.
+    rate_limit_login: str = Field(
+        default="5/minute", description="Per-IP limit for POST /auth/login"
+    )
+    rate_limit_register: str = Field(
+        default="3/minute", description="Per-IP limit for POST /auth/register"
+    )
+    rate_limit_refresh: str = Field(
+        default="20/minute", description="Per-IP limit for POST /auth/refresh"
+    )
+    rate_limit_logout: str = Field(
+        default="20/minute", description="Per-IP limit for POST /auth/logout"
+    )
+    rate_limit_rag_query: str = Field(
+        default="10/minute",
+        description="Per-authenticated-user limit for POST /rag/query",
+    )
+    rate_limit_agents_chat: str = Field(
+        default="10/minute",
+        description="Per-authenticated-user limit for POST /agents/chat "
+        "(most expensive route per-request: multi-call LangGraph agent + reranker)",
+    )
+
     @field_validator("environment")
     @classmethod
     def normalize_environment(cls, value: str) -> str:
