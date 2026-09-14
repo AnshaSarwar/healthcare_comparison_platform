@@ -28,6 +28,12 @@ Thumbs.db
 .coverage
 htmlcov/
 
+# Claude Code local/personal settings
+.claude/settings.local.json
+
+# Local git history backup bundles
+*.bundle
+
 # Generated (intermediate) OpenAPI export -- frontend/src/lib/generated-types.ts
 # is the committed artifact; this raw JSON is regenerated on demand by
 # `npm run generate:types` / scripts/export_openapi.py.
