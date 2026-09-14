@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { fetchMe } from "@/lib/api";
-import { getMe, getToken, isAuthenticated, setMe } from "@/lib/auth";
+import { getMe, setMe } from "@/lib/auth";
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -13,17 +13,13 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!isAuthenticated()) {
-        router.replace(`/login?next=${encodeURIComponent(pathname)}`);
-        return;
-      }
-      if (!getMe() && getToken()) {
+      if (!getMe()) {
         try {
           const me = await fetchMe();
           if (!cancelled) setMe(me);
         } catch {
           if (!cancelled) {
-            router.replace("/login");
+            router.replace(`/login?next=${encodeURIComponent(pathname)}`);
             return;
           }
         }

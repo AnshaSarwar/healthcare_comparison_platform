@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { clearToken, getMe, homeForRole, type StoredMe } from "@/lib/auth";
+import { logout as logoutApi } from "@/lib/api";
+import { clearSession, getMe, homeForRole, type StoredMe } from "@/lib/auth";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -41,8 +42,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         ? "Platform admin"
         : "Employer workspace";
 
-  function logout() {
-    clearToken();
+  async function logout() {
+    await logoutApi();
+    clearSession();
     router.replace("/login");
   }
 

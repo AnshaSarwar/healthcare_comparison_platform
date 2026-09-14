@@ -1,4 +1,4 @@
-import { clearToken, getToken } from "./auth";
+import { clearSession } from "./auth";
 import type {
   AgentSseEvent,
   ComparisonRequest,
@@ -16,7 +16,7 @@ import type {
 } from "./types";
 
 const API_URL =
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "http://127.0.0.1:8102";
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "http://localhost:8102";
 
 class ApiError extends Error {
   status: number;
@@ -27,39 +27,59 @@ class ApiError extends Error {
   }
 }
 
+async function extractErrorDetail(res: Response): Promise<string> {
+  let detail = res.statusText;
+  try {
+    const body = await res.json();
+    if (typeof body?.detail === "string") detail = body.detail;
+    else if (Array.isArray(body?.detail)) {
+      detail = body.detail.map((d: { msg?: string }) => d.msg || JSON.stringify(d)).join("; ");
+    }
+  } catch {
+    /* ignore */
+  }
+  return detail;
+}
+
+async function refreshSession(): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_URL}/api/v1/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
   auth = true,
+  isRetry = false,
 ): Promise<T> {
   const headers = new Headers(options.headers);
   if (!headers.has("Content-Type") && options.body) {
     headers.set("Content-Type", "application/json");
   }
-  if (auth) {
-    const token = getToken();
-    if (!token) {
-      throw new ApiError("Not authenticated", 401);
+
+  const res = await fetch(`${API_URL}${path}`, {
+    ...options,
+    headers,
+    credentials: "include",
+  });
+
+  if (res.status === 401 && auth && !isRetry && path !== "/api/v1/auth/refresh") {
+    const refreshed = await refreshSession();
+    if (refreshed) {
+      return request<T>(path, options, auth, true);
     }
-    headers.set("Authorization", `Bearer ${token}`);
+    clearSession();
   }
 
-  const res = await fetch(`${API_URL}${path}`, { ...options, headers });
-  if (res.status === 401) {
-    clearToken();
-  }
   if (!res.ok) {
-    let detail = res.statusText;
-    try {
-      const body = await res.json();
-      if (typeof body?.detail === "string") detail = body.detail;
-      else if (Array.isArray(body?.detail)) {
-        detail = body.detail.map((d: { msg?: string }) => d.msg || JSON.stringify(d)).join("; ");
-      }
-    } catch {
-      /* ignore */
-    }
-    throw new ApiError(detail, res.status);
+    throw new ApiError(await extractErrorDetail(res), res.status);
   }
   if (res.status === 204) {
     return undefined as T;
@@ -92,6 +112,14 @@ export async function register(body: {
     false,
   );
   return data.access_token;
+}
+
+export async function logout(): Promise<void> {
+  try {
+    await request<void>("/api/v1/auth/logout", { method: "POST" }, false);
+  } catch {
+    /* best-effort: cookies are cleared client-side regardless */
+  }
 }
 
 export async function fetchMe(): Promise<MeUser> {
@@ -169,11 +197,17 @@ export async function reviewPlanVersion(
 }
 
 export async function fetchDocumentContent(documentId: string): Promise<Blob> {
-  const token = getToken();
-  if (!token) throw new ApiError("Not authenticated", 401);
-  const res = await fetch(`${API_URL}/api/v1/documents/${documentId}/content`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const url = `${API_URL}/api/v1/documents/${documentId}/content`;
+  let res = await fetch(url, { credentials: "include" });
+  if (res.status === 401) {
+    const refreshed = await refreshSession();
+    if (refreshed) {
+      res = await fetch(url, { credentials: "include" });
+    }
+  }
+  if (res.status === 401) {
+    clearSession();
+  }
   if (!res.ok) throw new ApiError("Unable to load source document", res.status);
   return res.blob();
 }
@@ -225,36 +259,36 @@ export async function streamAgentChat(
   onEvent: (event: AgentSseEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
-  const token = getToken();
-  if (!token) throw new ApiError("Not authenticated", 401);
+  async function openStream(): Promise<Response> {
+    return fetch(`${API_URL}/api/v1/agents/chat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        question: body.question,
+        plan_ids: body.plan_ids || [],
+        thread_id: body.thread_id || null,
+      }),
+      signal,
+    });
+  }
 
-  const res = await fetch(`${API_URL}/api/v1/agents/chat`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      Accept: "text/event-stream",
-    },
-    body: JSON.stringify({
-      question: body.question,
-      plan_ids: body.plan_ids || [],
-      thread_id: body.thread_id || null,
-    }),
-    signal,
-  });
+  let res = await openStream();
+  if (res.status === 401) {
+    const refreshed = await refreshSession();
+    if (refreshed) {
+      res = await openStream();
+    }
+  }
 
   if (res.status === 401) {
-    clearToken();
+    clearSession();
   }
   if (!res.ok) {
-    let detail = res.statusText;
-    try {
-      const errBody = await res.json();
-      if (typeof errBody?.detail === "string") detail = errBody.detail;
-    } catch {
-      /* ignore */
-    }
-    throw new ApiError(detail, res.status);
+    throw new ApiError(await extractErrorDetail(res), res.status);
   }
 
   const reader = res.body?.getReader();

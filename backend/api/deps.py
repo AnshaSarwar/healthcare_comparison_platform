@@ -1,14 +1,11 @@
 from collections.abc import AsyncGenerator
 
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.policies import SecurityContext
 from backend.core.security import decode_access_token
 from backend.db.session import get_db as _get_db
-
-bearer_scheme = HTTPBearer()
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -16,11 +13,22 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-def get_security_context(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
-) -> SecurityContext:
+def get_security_context(request: Request) -> SecurityContext:
+    token: str | None = None
+    auth_header = request.headers.get("authorization")
+    if auth_header and auth_header.lower().startswith("bearer "):
+        token = auth_header[len("bearer ") :].strip()
+    if not token:
+        token = request.cookies.get("access_token")
+
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+
     try:
-        return decode_access_token(credentials.credentials)
+        return decode_access_token(token)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

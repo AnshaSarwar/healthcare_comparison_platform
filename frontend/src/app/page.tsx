@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { fetchMe } from "@/lib/api";
-import { getMe, homeForRole, isAuthenticated, setMe } from "@/lib/auth";
+import { getMe, homeForRole, setMe } from "@/lib/auth";
 
 export default function HomePage() {
   const router = useRouter();
@@ -11,10 +11,6 @@ export default function HomePage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!isAuthenticated()) {
-        router.replace("/login");
-        return;
-      }
       let me = getMe();
       if (!me) {
         try {

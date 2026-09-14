@@ -4,7 +4,7 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ApiError, fetchMe, register as registerApi } from "@/lib/api";
-import { homeForRole, setMe, setToken } from "@/lib/auth";
+import { homeForRole, setMe } from "@/lib/auth";
 import type { OrganizationType } from "@/lib/types";
 
 export default function RegisterPage() {
@@ -22,14 +22,13 @@ export default function RegisterPage() {
     setError(null);
     setLoading(true);
     try {
-      const token = await registerApi({
+      await registerApi({
         email,
         password,
         organization_name: organizationName,
         org_type: orgType,
         profile_name: profileName,
       });
-      setToken(token);
       const me = await fetchMe();
       setMe(me);
       router.replace(homeForRole(me.role));

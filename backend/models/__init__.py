@@ -9,6 +9,7 @@ from backend.models.entities import (
     Plan,
     PlanDocument,
     PlanVersion,
+    RefreshToken,
     User,
 )
 
@@ -24,4 +25,5 @@ __all__ = [
     "PlanVersion",
     "ComparisonRequest",
     "ComparisonResult",
+    "RefreshToken",
 ]

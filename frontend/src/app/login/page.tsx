@@ -4,7 +4,7 @@ import { FormEvent, Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { fetchMe, login as loginApi, ApiError } from "@/lib/api";
-import { homeForRole, isAuthenticated, setMe, setToken } from "@/lib/auth";
+import { getMe, homeForRole, setMe } from "@/lib/auth";
 
 function LoginForm() {
   const router = useRouter();
@@ -15,8 +15,9 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (isAuthenticated()) {
-      router.replace(searchParams.get("next") || homeForRole(undefined));
+    const cached = getMe();
+    if (cached) {
+      router.replace(searchParams.get("next") || homeForRole(cached.role));
     }
   }, [router, searchParams]);
 
@@ -25,8 +26,7 @@ function LoginForm() {
     setError(null);
     setLoading(true);
     try {
-      const token = await loginApi(email, password);
-      setToken(token);
+      await loginApi(email, password);
       const me = await fetchMe();
       setMe(me);
       router.replace(searchParams.get("next") || homeForRole(me.role));

@@ -1,4 +1,3 @@
-const TOKEN_KEY = "benefits_token";
 const ME_KEY = "benefits_me";
 
 export type StoredMe = {
@@ -9,24 +8,6 @@ export type StoredMe = {
   organization_name: string;
   org_type: "employer" | "healthcare_provider";
 };
-
-export function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-export function setToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token);
-}
-
-export function clearToken(): void {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(ME_KEY);
-}
-
-export function isAuthenticated(): boolean {
-  return Boolean(getToken());
-}
 
 export function getMe(): StoredMe | null {
   if (typeof window === "undefined") return null;
@@ -41,6 +22,10 @@ export function getMe(): StoredMe | null {
 
 export function setMe(me: StoredMe): void {
   localStorage.setItem(ME_KEY, JSON.stringify(me));
+}
+
+export function clearSession(): void {
+  localStorage.removeItem(ME_KEY);
 }
 
 export function homeForRole(role: StoredMe["role"] | undefined): string {
