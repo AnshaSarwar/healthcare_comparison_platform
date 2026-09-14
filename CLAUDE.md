@@ -88,9 +88,14 @@ is SaaS hardening:
   distinct term, e.g. `subscription_tiers`).
 - Auth hardening is done (see "Auth" above); still missing: email verification,
   password reset, invite-based provider onboarding.
-- No CI (lint/type-check/test) wired up for this repo.
-- No rate limiting on auth or the LLM-backed routes (`/rag/query`, `/agents/chat`) — the
-  most expensive endpoints to leave unprotected.
+- CI is done: `.github/workflows/ci.yml` runs ruff + pytest (backend) and
+  eslint + `tsc --noEmit` (frontend) on every push/PR. Ruff config lives in the root
+  `pyproject.toml`.
+- Rate limiting is done: `backend/core/rate_limit.py` (Redis-backed slowapi `Limiter`,
+  reusing `Settings.redis_url`) protects `/auth/login`, `/auth/register`,
+  `/auth/refresh`, `/auth/logout` (per-IP) and `/rag/query`, `/agents/chat` (per
+  authenticated user). Thresholds are tunable via `Settings.rate_limit_*`, not
+  hardcoded in route files.
 - No generated TypeScript client from the FastAPI OpenAPI schema — `frontend/src/lib/types.ts`
   is hand-maintained and can drift from `backend/schemas/`.
 - Seed data (`backend/db/seed.py`) is a single hardcoded demo tenant, not a factory for
