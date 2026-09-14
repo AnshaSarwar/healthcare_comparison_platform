@@ -1,7 +1,7 @@
-from uuid import UUID
 import asyncio
 from copy import deepcopy
 from functools import partial
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

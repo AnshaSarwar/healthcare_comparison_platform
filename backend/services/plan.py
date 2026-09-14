@@ -1,5 +1,5 @@
+from datetime import UTC, datetime
 from uuid import UUID
-from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,7 +11,6 @@ from backend.core.policies import (
     can_view_provider_pricing,
     strip_pricing_from_plan,
 )
-from backend.models import HealthcareProvider, Plan
 from backend.domain.enums import PolicyReviewStatus
 from backend.models import HealthcareProvider, Plan, PlanVersion
 from backend.schemas import PlanRead, PlanTerms
@@ -22,7 +21,7 @@ class PlanServiceError(Exception):
 
 
 def active_plan_version(plan: Plan, now: datetime | None = None) -> PlanVersion | None:
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     candidates = [
         version
         for version in plan.versions
@@ -32,7 +31,7 @@ def active_plan_version(plan: Plan, now: datetime | None = None) -> PlanVersion 
     ]
     return max(
         candidates,
-        key=lambda version: version.effective_from or datetime.min.replace(tzinfo=timezone.utc),
+        key=lambda version: version.effective_from or datetime.min.replace(tzinfo=UTC),
         default=None,
     )
 

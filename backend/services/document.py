@@ -8,7 +8,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from backend.core.policies import SecurityContext, can_manage_plan_documents, can_view_provider_plans
+from backend.core.policies import (
+    SecurityContext,
+    can_manage_plan_documents,
+    can_view_provider_plans,
+)
 from backend.domain.enums import DocumentIndexStatus, PolicyReviewStatus
 from backend.models import Plan, PlanDocument, PlanVersion
 from backend.policy_extraction import extract_policy_terms

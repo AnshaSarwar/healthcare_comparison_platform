@@ -7,7 +7,8 @@
     "build": "next build",
     "build:dev": "next build --turbopack",
     "start": "next start --port 3100",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "react": "19.1.0",

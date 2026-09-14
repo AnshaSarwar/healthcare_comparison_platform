@@ -8,7 +8,11 @@ from functools import partial
 from uuid import UUID
 
 from backend.core.policies import SecurityContext
-from backend.rag.cache import get_exact_cached_answer, get_semantic_cached_answer, store_cached_answer
+from backend.rag.cache import (
+    get_exact_cached_answer,
+    get_semantic_cached_answer,
+    store_cached_answer,
+)
 from backend.rag.embeddings import get_embeddings
 from backend.rag.generate import astream_answer, citations_from_answer, sources_from_records
 from backend.rag.retriever import retrieve

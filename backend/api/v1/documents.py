@@ -1,13 +1,12 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.deps import get_db, get_security_context
 from backend.core.policies import SecurityContext
 from backend.schemas import PlanDocumentRead
-from fastapi.responses import FileResponse
-
 from backend.services.document import (
     DocumentServiceError,
     get_document,

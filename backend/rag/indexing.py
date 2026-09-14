@@ -12,10 +12,15 @@ from sqlalchemy.orm import selectinload
 from backend.domain.enums import DocumentIndexStatus
 from backend.models import Plan, PlanDocument
 from backend.rag.embeddings import get_embeddings
-from backend.rag.loaders import load_pages, load_text, read_path
+from backend.rag.loaders import load_pages, read_path
 from backend.rag.retriever import rebuild_bm25_from_qdrant
 from backend.rag.splitters import split_for_parent_child
-from backend.rag.store import delete_document_chunks, ensure_collection, rag_configured, upsert_chunks
+from backend.rag.store import (
+    delete_document_chunks,
+    ensure_collection,
+    rag_configured,
+    upsert_chunks,
+)
 
 logger = logging.getLogger(__name__)
 

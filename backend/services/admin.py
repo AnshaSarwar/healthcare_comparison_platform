@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -23,7 +23,6 @@ from backend.models import (
     Hospital,
     Organization,
     Plan,
-    PlanDocument,
     PlanVersion,
     User,
 )
@@ -327,7 +326,7 @@ async def review_plan_version(
         )
     version.review_status = body.review_status
     version.reviewed_by = ctx.user_id
-    version.reviewed_at = datetime.now(timezone.utc)
+    version.reviewed_at = datetime.now(UTC)
     version.review_notes = body.review_notes
     await session.commit()
     await session.refresh(version)
