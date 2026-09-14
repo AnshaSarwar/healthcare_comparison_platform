@@ -173,5 +173,5 @@ Before reporting a task complete: run the full backend test suite, run lint, and
 - When explaining an unfamiliar codebase, default to plain English first, code references second.
 
 ## Git commit conventions
-- Do NOT add "Co-Authored-By: Claude" or any Claude attribution trailer to commit messages.
+- Do NOT add "Co-Authored-By: Claude", Claude attribution trailer or "Claude-Session" trailers to commit messages.
 - Write commit messages in [Conventional Commits / whatever style you use] format.
