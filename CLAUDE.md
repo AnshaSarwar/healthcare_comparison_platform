@@ -107,6 +107,21 @@ Demo accounts seeded by `backend/db/seed.py` (password `password123` for all):
     (resend button) and a provider-invite management panel on the platform admin page.
 - **Versioning**: API versioned by path (`/api/v1`); bump the path segment for breaking
   changes rather than content negotiation.
+- **Frontend types are generated from the backend's OpenAPI schema**, not hand-written.
+  `scripts/export_openapi.py` imports `backend.main.app` and dumps `app.openapi()` to
+  `openapi.json` (repo root, gitignored) — this only introspects routes/Pydantic models,
+  so it needs no DB/Redis/Qdrant connection. `npm run generate:types` (in `frontend/`)
+  runs that script, then `openapi-typescript` turns the JSON into the committed
+  `frontend/src/lib/generated-types.ts`. `frontend/src/lib/types.ts` re-exports/wraps
+  those generated types — the only hand-written types left are ones the schema can't
+  express: `AgentSseEvent`/`SourceChunk` (the `/agents/chat` and `/rag/query` SSE streams
+  have no `response_model` to introspect) and a couple of narrowings the backend
+  under-types on purpose (e.g. `ProviderInvite.status` is a plain `str` on the backend,
+  `PlanVersion.extraction_metadata` is an untyped `dict` like `raw_terms`). CI
+  (`.github/workflows/ci.yml`, frontend job) reruns `generate:types` and fails the build
+  on `git diff` against the committed file, so the two can't silently drift. Run
+  `npm run generate:types` locally after changing any `backend/schemas/` model the
+  frontend consumes, and commit the regenerated file.
 
 ## Known gaps (productionization, not comparison logic)
 
@@ -129,8 +144,6 @@ is SaaS hardening:
   `/auth/refresh`, `/auth/logout` (per-IP) and `/rag/query`, `/agents/chat` (per
   authenticated user). Thresholds are tunable via `Settings.rate_limit_*`, not
   hardcoded in route files.
-- No generated TypeScript client from the FastAPI OpenAPI schema — `frontend/src/lib/types.ts`
-  is hand-maintained and can drift from `backend/schemas/`.
 - Seed data (`backend/db/seed.py`) is a single hardcoded demo tenant, not a factory for
   varied demo/load-test tenants.
 
@@ -143,3 +156,22 @@ is SaaS hardening:
   `backend/domain/rules_engine/engine.py` (see "Rules engine vs LLM boundary" above).
 - Keep this file updated as product scope, endpoints, or the data model change — it's the
   only standing reference doc for this repo now.
+
+## FastAPI Endpoint Conventions
+- Every route that can be rate-limited via slowapi MUST accept `response: Response` as a parameter, otherwise slowapi raises a 500 when injecting rate-limit headers.
+- Ensure logging config is initialized in dev mode so verification/reset emails are printed to console instead of silently dropped.
+
+## Definition of Done
+Before reporting a task complete: run the full backend test suite, run lint, and run an end-to-end smoke test of any new endpoints. Then update project notes and commit + push in one step unless told otherwise.
+
+## Repo Hygiene
+- The frontend directory must NOT contain its own nested `.git`. If one appears, tell me and I will confirm removal — do not silently skip staging.
+- Always verify `git status` is clean and the push succeeded before saying the work is pushed.
+
+## Working Style
+- For large tasks, post a one-line plan first, then implement incrementally and report progress after each file group. Do not spend more than ~5 minutes on read-only research before writing code.
+- When explaining an unfamiliar codebase, default to plain English first, code references second.
+
+## Git commit conventions
+- Do NOT add "Co-Authored-By: Claude" or any Claude attribution trailer to commit messages.
+- Write commit messages in [Conventional Commits / whatever style you use] format.

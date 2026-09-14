@@ -1,21 +1,20 @@
 import { clearSession } from "./auth";
+import type { components } from "./generated-types";
 import type {
   AgentSseEvent,
   ComparisonRequest,
   EmployerProfile,
   MeUser,
   Organization,
-  OrganizationType,
   Plan,
-  PlanTerms,
-  PricingTier,
   ProviderInvite,
   ProviderInvitePreview,
   ProviderProfile,
-  CoverageType,
   PlanVersion,
   PolicyReviewStatus,
 } from "./types";
+
+type Schemas = components["schemas"];
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "http://localhost:8102";
@@ -90,25 +89,20 @@ async function request<T>(
 }
 
 export async function login(email: string, password: string): Promise<string> {
-  const data = await request<{ access_token: string }>(
+  const body: Schemas["LoginRequest"] = { email, password };
+  const data = await request<Schemas["TokenResponse"]>(
     "/api/v1/auth/login",
     {
       method: "POST",
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify(body),
     },
     false,
   );
   return data.access_token;
 }
 
-export async function register(body: {
-  email: string;
-  password: string;
-  organization_name: string;
-  org_type: OrganizationType;
-  profile_name: string;
-}): Promise<string> {
-  const data = await request<{ access_token: string }>(
+export async function register(body: Schemas["RegisterRequest"]): Promise<string> {
+  const data = await request<Schemas["TokenResponse"]>(
     "/api/v1/auth/register",
     { method: "POST", body: JSON.stringify(body) },
     false,
@@ -129,33 +123,37 @@ export async function fetchMe(): Promise<MeUser> {
 }
 
 export async function verifyEmail(token: string): Promise<void> {
+  const body: Schemas["VerifyEmailRequest"] = { token };
   await request<void>(
     "/api/v1/auth/email/verify",
-    { method: "POST", body: JSON.stringify({ token }) },
+    { method: "POST", body: JSON.stringify(body) },
     false,
   );
 }
 
 export async function resendVerification(email: string): Promise<void> {
+  const body: Schemas["ResendVerificationRequest"] = { email };
   await request<void>(
     "/api/v1/auth/email/resend-verification",
-    { method: "POST", body: JSON.stringify({ email }) },
+    { method: "POST", body: JSON.stringify(body) },
     false,
   );
 }
 
 export async function requestPasswordReset(email: string): Promise<void> {
+  const body: Schemas["PasswordResetRequest"] = { email };
   await request<void>(
     "/api/v1/auth/password-reset/request",
-    { method: "POST", body: JSON.stringify({ email }) },
+    { method: "POST", body: JSON.stringify(body) },
     false,
   );
 }
 
 export async function confirmPasswordReset(token: string, newPassword: string): Promise<void> {
+  const body: Schemas["PasswordResetConfirmRequest"] = { token, new_password: newPassword };
   await request<void>(
     "/api/v1/auth/password-reset/confirm",
-    { method: "POST", body: JSON.stringify({ token, new_password: newPassword }) },
+    { method: "POST", body: JSON.stringify(body) },
     false,
   );
 }
@@ -165,19 +163,18 @@ export async function previewInvite(token: string): Promise<ProviderInvitePrevie
 }
 
 export async function acceptInvite(token: string, password: string): Promise<string> {
-  const data = await request<{ access_token: string }>(
+  const body: Schemas["ProviderInviteAcceptRequest"] = { password };
+  const data = await request<Schemas["TokenResponse"]>(
     `/api/v1/auth/invites/${token}/accept`,
-    { method: "POST", body: JSON.stringify({ password }) },
+    { method: "POST", body: JSON.stringify(body) },
     false,
   );
   return data.access_token;
 }
 
-export async function createInvite(body: {
-  email: string;
-  organization_name: string;
-  profile_name: string;
-}): Promise<ProviderInvite> {
+export async function createInvite(
+  body: Schemas["ProviderInviteCreateRequest"],
+): Promise<ProviderInvite> {
   return request<ProviderInvite>("/api/v1/invites", {
     method: "POST",
     body: JSON.stringify(body),
@@ -197,7 +194,7 @@ export async function getEmployerMe(): Promise<EmployerProfile> {
 }
 
 export async function updateEmployerMe(
-  body: Partial<Pick<EmployerProfile, "name" | "demographics" | "requirements">>,
+  body: Schemas["EmployerUpdateRequest"],
 ): Promise<EmployerProfile> {
   return request<EmployerProfile>("/api/v1/employers/me", {
     method: "PATCH",
@@ -209,23 +206,16 @@ export async function getProviderMe(): Promise<ProviderProfile> {
   return request<ProviderProfile>("/api/v1/providers/me");
 }
 
-export async function addHospital(body: {
-  name: string;
-  city: string;
-  tier?: string;
-}): Promise<{ id: string; name: string; city: string; tier: string }> {
+export async function addHospital(
+  body: Schemas["HospitalCreateRequest"],
+): Promise<Schemas["HospitalRead"]> {
   return request("/api/v1/providers/me/hospitals", {
     method: "POST",
     body: JSON.stringify(body),
   });
 }
 
-export async function createPlan(body: {
-  name: string;
-  coverage_type: CoverageType;
-  terms: PlanTerms;
-  pricing_tiers: PricingTier[];
-}): Promise<Plan> {
+export async function createPlan(body: Schemas["PlanCreateRequest"]): Promise<Plan> {
   return request<Plan>("/api/v1/plans", {
     method: "POST",
     body: JSON.stringify(body),
@@ -234,12 +224,7 @@ export async function createPlan(body: {
 
 export async function updatePlan(
   planId: string,
-  body: {
-    name?: string;
-    coverage_type?: CoverageType;
-    terms?: PlanTerms;
-    pricing_tiers?: PricingTier[];
-  },
+  body: Schemas["PlanUpdateRequest"],
 ): Promise<Plan> {
   return request<Plan>(`/api/v1/plans/${planId}`, {
     method: "PATCH",
@@ -282,23 +267,18 @@ export async function listOrganizations(): Promise<Organization[]> {
   return request<Organization[]>("/api/v1/organizations");
 }
 
-export async function createOrganization(body: {
-  name: string;
-  org_type: OrganizationType;
-  profile_name: string;
-}): Promise<Organization> {
+export async function createOrganization(
+  body: Schemas["OrganizationCreateRequest"],
+): Promise<Organization> {
   return request<Organization>("/api/v1/organizations", {
     method: "POST",
     body: JSON.stringify(body),
   });
 }
 
-export async function createUser(body: {
-  email: string;
-  password: string;
-  role: string;
-  organization_id: string;
-}): Promise<{ id: string; email: string; role: string }> {
+export async function createUser(
+  body: Schemas["UserCreateRequest"],
+): Promise<Schemas["UserRead"]> {
   return request("/api/v1/users", {
     method: "POST",
     body: JSON.stringify(body),
@@ -310,9 +290,10 @@ export async function listPlans(): Promise<Plan[]> {
 }
 
 export async function createComparison(planIds: string[]): Promise<ComparisonRequest> {
+  const body: Schemas["ComparisonCreateRequest"] = { plan_ids: planIds };
   return request<ComparisonRequest>("/api/v1/comparisons", {
     method: "POST",
-    body: JSON.stringify({ plan_ids: planIds }),
+    body: JSON.stringify(body),
   });
 }
 

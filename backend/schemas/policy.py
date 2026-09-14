@@ -37,6 +37,7 @@ class PlanVersionRead(BaseModel):
     review_notes: str | None
     raw_terms: dict
     normalized_terms: PlanTerms
+    extraction_metadata: dict
     pricing_tiers: list[PricingTier]
     source_document_id: UUID | None
     imported_by_org_id: UUID | None

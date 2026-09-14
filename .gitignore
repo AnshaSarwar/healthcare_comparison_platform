@@ -27,3 +27,8 @@ Thumbs.db
 # Coverage
 .coverage
 htmlcov/
+
+# Generated (intermediate) OpenAPI export -- frontend/src/lib/generated-types.ts
+# is the committed artifact; this raw JSON is regenerated on demand by
+# `npm run generate:types` / scripts/export_openapi.py.
+openapi.json

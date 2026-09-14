@@ -211,13 +211,13 @@ export default function ComparisonDetailPage() {
             </section>
           )}
 
-          {result.citations?.length > 0 && (
+          {(result.citations?.length ?? 0) > 0 && (
             <section className="panel">
               <h2 style={{ marginTop: 0, fontFamily: "var(--font-display)" }}>
                 Citations
               </h2>
               <div className="citations">
-                {result.citations.map((c, i) => (
+                {result.citations!.map((c, i) => (
                   <blockquote key={`${c.document_id}-${i}`} className="citation">
                     <strong>{c.plan_name}</strong> — {c.section}
                     <div style={{ marginTop: 4 }}>&ldquo;{c.quote}&rdquo;</div>

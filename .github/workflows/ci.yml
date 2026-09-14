@@ -37,6 +37,16 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install backend dependencies
+        working-directory: .
+        run: pip install -r requirements.txt
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -49,6 +59,14 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      - name: Regenerate OpenAPI-derived types and check for drift
+        run: |
+          npm run generate:types
+          git diff --exit-code -- src/lib/generated-types.ts || {
+            echo "::error::frontend/src/lib/generated-types.ts is out of date with the backend's OpenAPI schema. Run 'npm run generate:types' in frontend/ and commit the result.";
+            exit 1;
+          }
 
       - name: Type-check
         run: npm run typecheck

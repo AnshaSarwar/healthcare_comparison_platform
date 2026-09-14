@@ -10,7 +10,7 @@ import {
   listOrganizations,
   revokeInvite,
 } from "@/lib/api";
-import type { Organization, OrganizationType, ProviderInvite } from "@/lib/types";
+import type { Organization, OrganizationType, ProviderInvite, UserRole } from "@/lib/types";
 
 export default function PlatformPage() {
   const [orgs, setOrgs] = useState<Organization[]>([]);
@@ -22,7 +22,7 @@ export default function PlatformPage() {
   const [userEmail, setUserEmail] = useState("");
   const [userPassword, setUserPassword] = useState("password123");
   const [userOrgId, setUserOrgId] = useState("");
-  const [userRole, setUserRole] = useState("employer_admin");
+  const [userRole, setUserRole] = useState<UserRole>("employer_admin");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteOrgName, setInviteOrgName] = useState("");
   const [inviteProfileName, setInviteProfileName] = useState("");
@@ -286,7 +286,7 @@ export default function PlatformPage() {
           <select
             id="userRole"
             value={userRole}
-            onChange={(e) => setUserRole(e.target.value)}
+            onChange={(e) => setUserRole(e.target.value as UserRole)}
           >
             <option value="employer_admin">employer_admin</option>
             <option value="healthcare_org_admin">healthcare_org_admin</option>
