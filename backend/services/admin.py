@@ -168,9 +168,7 @@ async def add_hospital(
     return hospital
 
 
-async def create_plan(
-    session: AsyncSession, ctx: SecurityContext, body: PlanCreateRequest
-):
+async def create_plan(session: AsyncSession, ctx: SecurityContext, body: PlanCreateRequest):
     provider = await get_provider_me(session, ctx)
     plan = Plan(
         id=uuid4(),
@@ -225,9 +223,7 @@ async def update_plan(
 
 async def _get_plan_for_version(session: AsyncSession, plan_id: UUID) -> Plan:
     result = await session.execute(
-        select(Plan)
-        .where(Plan.id == plan_id)
-        .options(selectinload(Plan.provider))
+        select(Plan).where(Plan.id == plan_id).options(selectinload(Plan.provider))
     )
     plan = result.scalar_one_or_none()
     if plan is None:
@@ -244,7 +240,11 @@ async def create_plan_version(
     plan = await _get_plan_for_version(session, plan_id)
     if not can_manage_provider(ctx, plan.provider.organization_id):
         raise AccessDeniedError("Not authorized to create a plan version")
-    if body.effective_to is not None and body.effective_from is not None and body.effective_to <= body.effective_from:
+    if (
+        body.effective_to is not None
+        and body.effective_from is not None
+        and body.effective_to <= body.effective_from
+    ):
         raise AdminServiceError("effective_to must be after effective_from")
     version = PlanVersion(
         plan_id=plan.id,
@@ -255,7 +255,7 @@ async def create_plan_version(
         review_status=PolicyReviewStatus.NEEDS_REVIEW,
         raw_terms=body.raw_terms,
         normalized_terms=body.normalized_terms.model_dump(),
-        extraction_metadata={},
+        extraction_metadata=body.extraction_metadata,
         pricing_tiers=[tier.model_dump() for tier in body.pricing_tiers],
         source_document_id=body.source_document_id,
         imported_by_user_id=ctx.user_id,
@@ -289,9 +289,9 @@ async def review_plan_version(
     body: PlanVersionReviewRequest,
 ) -> PlanVersion:
     result = await session.execute(
-        select(PlanVersion).options(selectinload(PlanVersion.plan).selectinload(Plan.provider)).where(
-            PlanVersion.id == version_id
-        )
+        select(PlanVersion)
+        .options(selectinload(PlanVersion.plan).selectinload(Plan.provider))
+        .where(PlanVersion.id == version_id)
     )
     version = result.scalar_one_or_none()
     if version is None:
@@ -299,7 +299,10 @@ async def review_plan_version(
     provider_org_id = version.plan.provider.organization_id
     if not can_manage_provider(ctx, provider_org_id):
         raise AccessDeniedError("Not authorized to review this plan version")
-    if body.review_status in (PolicyReviewStatus.REJECTED, PolicyReviewStatus.NEEDS_CORRECTION) and not body.review_notes:
+    if (
+        body.review_status in (PolicyReviewStatus.REJECTED, PolicyReviewStatus.NEEDS_CORRECTION)
+        and not body.review_notes
+    ):
         raise AdminServiceError("Review notes are required for rejection or correction")
     if body.review_status == PolicyReviewStatus.APPROVED:
         evidence = (version.extraction_metadata or {}).get("evidence") or []
@@ -314,7 +317,9 @@ async def review_plan_version(
         evidence_fields = {item.get("field") for item in evidence if isinstance(item, dict)}
         if not required_fields.issubset(evidence_fields):
             raise AdminServiceError("Cannot approve: required extraction evidence is missing")
-        if any(float(item.get("confidence", 0)) < 0.7 for item in evidence if isinstance(item, dict)):
+        if any(
+            float(item.get("confidence", 0)) < 0.7 for item in evidence if isinstance(item, dict)
+        ):
             raise AdminServiceError("Cannot approve: extraction confidence is too low")
         await session.execute(
             PlanVersion.__table__.update()
@@ -364,9 +369,7 @@ async def create_organization(
             )
         )
     else:
-        session.add(
-            HealthcareProvider(id=uuid4(), organization_id=org.id, name=body.profile_name)
-        )
+        session.add(HealthcareProvider(id=uuid4(), organization_id=org.id, name=body.profile_name))
     await session.commit()
     await session.refresh(org)
     return org
